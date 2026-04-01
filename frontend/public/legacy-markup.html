@@ -25,10 +25,10 @@
     <div class="card amber"><div class="card-label">Due Within 15 Days</div><div class="card-value" id="s-soon">—</div></div>
     <div class="card purple"><div class="card-label">Due This Month</div><div class="card-value" id="s-due-month-count">—</div></div>
     <div class="card green"><div class="card-label">Paid This Month</div><div class="card-value" id="s-paid-month-count">—</div></div>
-    <div class="card red"><div class="card-label">Amount Overdue</div><div class="card-value" id="s-overdue-amount" style="font-size:20px">—</div></div>
-    <div class="card amber"><div class="card-label">Amount Due Within 15 Days</div><div class="card-value" id="s-soon-amount" style="font-size:20px">—</div></div>
-    <div class="card purple"><div class="card-label">Amount Due This Month</div><div class="card-value" id="s-due-month-amount" style="font-size:20px">—</div></div>
-    <div class="card green"><div class="card-label">Amount Paid This Month</div><div class="card-value" id="s-paid-month-amount" style="font-size:20px">—</div></div>
+    <div class="card red"><div class="card-label">Amount Overdue</div><div class="card-value" id="s-overdue-amount" style="font-size:2rem">—</div></div>
+    <div class="card amber"><div class="card-label">Amount Due Within 15 Days</div><div class="card-value" id="s-soon-amount" style="font-size:2rem">—</div></div>
+    <div class="card purple"><div class="card-label">Amount Due This Month</div><div class="card-value" id="s-due-month-amount" style="font-size:2rem">—</div></div>
+    <div class="card green"><div class="card-label">Amount Paid This Month</div><div class="card-value" id="s-paid-month-amount" style="font-size:2rem">—</div></div>
   </div>
   <div class="sec"><div class="sec-title">⚠ Overdue</div><div class="bill-list" id="g-overdue"><div class="none-msg">Loading…</div></div></div>
   <div class="sec"><div class="sec-title">⏰ Due Within 15 Days</div><div class="bill-list" id="g-soon"><div class="none-msg">Loading…</div></div></div>
@@ -62,10 +62,10 @@
     <button class="year-nav-btn" onclick="changeYear(-1)">&#8592;</button>
     <div class="year-display" id="year-display">2026</div>
     <button class="year-nav-btn" onclick="changeYear(1)">&#8594;</button>
-    <span style="color:var(--ink-light);font-size:13px;margin-left:8px">All scheduled payments for the year</span>
+    <span style="color:var(--ink-light);font-size:1.3rem;margin-left:8px">All scheduled payments for the year</span>
   </div>
   <div class="year-cards" id="year-summary"></div>
-  <div id="year-content"><div class="none-msg" style="padding:40px">Loading…</div></div>
+  <div id="year-content"><div class="none-msg" style="padding:calc(40px * var(--layout-scale-n) / var(--layout-scale-d))">Loading…</div></div>
 </div>
 
 <!-- ═══ PAYMENT LOG ═══ -->

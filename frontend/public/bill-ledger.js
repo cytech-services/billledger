@@ -616,7 +616,7 @@ async function loadBillsTable() {
         <td>${b.amount?fmtMoney(b.amount):'—'}</td>
         <td>${b.autopay==='Yes'?'✅ Yes':'No'}</td>
         <td class="td-muted">${esc(b.method||'—')}</td>
-        <td class="td-muted" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.notes||'—')}</td>
+        <td class="td-muted" style="max-width:calc(140px * var(--layout-scale-n) / var(--layout-scale-d));overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.notes||'—')}</td>
         <td><div class="td-actions">
           <button class="btn btn-ghost btn-sm" onclick="openEdit(${b.id})">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="deleteBill(${b.id})">Delete</button>
@@ -629,7 +629,7 @@ async function loadBillsTable() {
 // ── Year View ─────────────────────────────────────────────────────────────
 async function loadYearView() {
   document.getElementById('year-display').textContent = currentYear;
-  document.getElementById('year-content').innerHTML = '<div class="none-msg" style="padding:40px">Loading…</div>';
+  document.getElementById('year-content').innerHTML = '<div class="none-msg" style="padding:calc(40px * var(--layout-scale-n) / var(--layout-scale-d))">Loading…</div>';
   try {
     const data = await api('GET',`/api/year-view?year=${currentYear}`);
     const allOccurrences = (data.months || []).flatMap((m)=>m.occurrences || []);
@@ -639,19 +639,19 @@ async function loadYearView() {
     const overdueCards = overdueCount > 0 ? `
       <div class="year-cards-top">
         <div class="card red"><div class="card-label">Overdue</div><div class="card-value">${overdueCount}</div></div>
-        <div class="card red"><div class="card-label">Amount Overdue</div><div class="card-value" style="font-size:20px">${fmtMoney(overdueAmount)}</div></div>
+        <div class="card red"><div class="card-label">Amount Overdue</div><div class="card-value" style="font-size:2rem">${fmtMoney(overdueAmount)}</div></div>
       </div>` : '';
     // Summary cards
     document.getElementById('year-summary').innerHTML = `
       ${overdueCards}
       <div class="year-cards-main">
         <div class="card blue"><div class="card-label">Total Bills</div><div class="card-value">${data.count}</div></div>
-        <div class="card purple"><div class="card-label">Total Scheduled</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_total)}</div></div>
-        <div class="card amber"><div class="card-label">Unpaid / Upcoming</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_unpaid)}</div></div>
-        <div class="card green"><div class="card-label">Already Paid</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_paid_total)}</div></div>
+        <div class="card purple"><div class="card-label">Total Scheduled</div><div class="card-value" style="font-size:2rem">${fmtMoney(data.year_total)}</div></div>
+        <div class="card amber"><div class="card-label">Unpaid / Upcoming</div><div class="card-value" style="font-size:2rem">${fmtMoney(data.year_unpaid)}</div></div>
+        <div class="card green"><div class="card-label">Already Paid</div><div class="card-value" style="font-size:2rem">${fmtMoney(data.year_paid_total)}</div></div>
       </div>`;
     if (!data.months.length) {
-      document.getElementById('year-content').innerHTML = '<div class="none-msg" style="padding:40px">No bills scheduled for this year.</div>';
+      document.getElementById('year-content').innerHTML = '<div class="none-msg" style="padding:calc(40px * var(--layout-scale-n) / var(--layout-scale-d))">No bills scheduled for this year.</div>';
       return;
     }
     document.getElementById('year-content').innerHTML = data.months.map(m=>`
@@ -666,7 +666,7 @@ async function loadYearView() {
 }
 function yearRowHTML(o) {
   const labels={overdue:'⚠ Overdue','due-soon':'⏰ Due Soon',upcoming:'📅 Upcoming',paid:'✅ Paid'};
-  const paidInfo = o.status==='paid' && o.paid_date ? `<span style="font-size:11px;color:var(--green)">Paid ${fmtDate(o.paid_date)}${o.paid_by?' by '+esc(o.paid_by):''}</span>` : '';
+  const paidInfo = o.status==='paid' && o.paid_date ? `<span style="font-size:1.1rem;color:var(--green)">Paid ${fmtDate(o.paid_date)}${o.paid_by?' by '+esc(o.paid_by):''}</span>` : '';
   const canPay = o.status==='overdue' || o.status==='upcoming';
   const actionBtn = canPay ? `<button class="btn btn-pay btn-sm" onclick="openPayFromYear(${o.bill_id})">Mark Paid</button>` : '';
   const paidAmount = o.status==='paid' && o.paid_amount!=null
@@ -877,7 +877,7 @@ function openPay(billId) {
   const b = allBills.find(x=>x.id===billId);
   document.getElementById('pay-info').innerHTML=`
     <strong>${esc(b.name)}</strong>${b.company?' — '+esc(b.company):''}<br>
-    <span style="color:var(--ink-light);font-size:12px">${b.frequency}${b.amount?' · '+fmtMoney(b.amount):''}</span>`;
+    <span style="color:var(--ink-light);font-size:1.2rem">${b.frequency}${b.amount?' · '+fmtMoney(b.amount):''}</span>`;
   document.getElementById('p-date').value    = new Date().toISOString().slice(0,10);
   document.getElementById('p-amount').value  = b.amount||'';
   document.getElementById('p-method').value  = b.method||'';
@@ -970,7 +970,7 @@ async function openEditPayment(paymentId) {
     editingPaymentId = paymentId;
     document.getElementById('pe-info').innerHTML = `
       <strong>${esc(p.bill_name||'Unknown Bill')}</strong><br>
-      <span style="color:var(--ink-light);font-size:12px">Payment ID: ${p.id}</span>`;
+      <span style="color:var(--ink-light);font-size:1.2rem">Payment ID: ${p.id}</span>`;
     document.getElementById('pe-date').value = p.paid_date || '';
     document.getElementById('pe-amount').value = p.amount ?? '';
     document.getElementById('pe-method').value = p.method || '';
