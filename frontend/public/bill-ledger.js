@@ -572,12 +572,24 @@ async function loadYearView() {
   document.getElementById('year-content').innerHTML = '<div class="none-msg" style="padding:40px">Loading…</div>';
   try {
     const data = await api('GET',`/api/year-view?year=${currentYear}`);
+    const allOccurrences = (data.months || []).flatMap((m)=>m.occurrences || []);
+    const overdueOccurrences = allOccurrences.filter((o)=>o.status==='overdue');
+    const overdueCount = overdueOccurrences.length;
+    const overdueAmount = overdueOccurrences.reduce((sum, o)=>sum + (Number(o.amount) || 0), 0);
+    const overdueCards = overdueCount > 0 ? `
+      <div class="year-cards-top">
+        <div class="card red"><div class="card-label">Overdue</div><div class="card-value">${overdueCount}</div></div>
+        <div class="card red"><div class="card-label">Amount Overdue</div><div class="card-value" style="font-size:20px">${fmtMoney(overdueAmount)}</div></div>
+      </div>` : '';
     // Summary cards
     document.getElementById('year-summary').innerHTML = `
-      <div class="card blue"><div class="card-label">Total Bills</div><div class="card-value">${data.count}</div></div>
-      <div class="card purple"><div class="card-label">Total Scheduled</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_total)}</div></div>
-      <div class="card amber"><div class="card-label">Unpaid / Upcoming</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_unpaid)}</div></div>
-      <div class="card green"><div class="card-label">Already Paid</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_total-data.year_unpaid)}</div></div>`;
+      ${overdueCards}
+      <div class="year-cards-main">
+        <div class="card blue"><div class="card-label">Total Bills</div><div class="card-value">${data.count}</div></div>
+        <div class="card purple"><div class="card-label">Total Scheduled</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_total)}</div></div>
+        <div class="card amber"><div class="card-label">Unpaid / Upcoming</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_unpaid)}</div></div>
+        <div class="card green"><div class="card-label">Already Paid</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_total-data.year_unpaid)}</div></div>
+      </div>`;
     if (!data.months.length) {
       document.getElementById('year-content').innerHTML = '<div class="none-msg" style="padding:40px">No bills scheduled for this year.</div>';
       return;
