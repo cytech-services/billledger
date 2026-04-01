@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 # Skip postinstall (nuxt prepare) during install; build runs explicitly later.
-RUN npm ci --ignore-scripts
+RUN npm install --ignore-scripts
 
 COPY . .
 RUN npm run build
