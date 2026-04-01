@@ -13,6 +13,28 @@ let backupStatus = null;
 const DEFAULT_METHOD_OPTIONS = ['Credit Card','Debit Card','Bank Transfer','Check','Cash','Auto-Pay'];
 const VALID_PAGES = ['dashboard','bills','yearview','log','settings'];
 const VALID_SETTINGS_TABS = ['methods', 'backups'];
+const THEME_STORAGE_KEY = 'billledger.theme';
+
+function getThemePreference() {
+  const v = String(localStorage.getItem(THEME_STORAGE_KEY) || 'system').toLowerCase();
+  if (v === 'light' || v === 'dark' || v === 'system') return v;
+  return 'system';
+}
+
+function applyThemePreference(pref) {
+  const root = document.documentElement;
+  if (pref === 'light') root.setAttribute('data-theme', 'light');
+  else if (pref === 'dark') root.setAttribute('data-theme', 'dark');
+  else root.removeAttribute('data-theme');
+  const sel = document.getElementById('theme-select');
+  if (sel) sel.value = pref;
+}
+
+function setThemePreference(pref) {
+  const next = ['system', 'light', 'dark'].includes(String(pref)) ? String(pref) : 'system';
+  localStorage.setItem(THEME_STORAGE_KEY, next);
+  applyThemePreference(next);
+}
 
 // ── API ─────────────────────────────────────────────────────────────────
 async function api(method, url, body) {
@@ -348,9 +370,9 @@ function activatePage(route) {
   const targetSettingsTab = normalizeSettingsTab(route?.settingsTab || currentSettingsTab);
   if (targetPage === 'settings') currentSettingsTab = targetSettingsTab;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('nav.page-nav button[data-page]').forEach(b=>b.classList.remove('active'));
   document.getElementById('pg-'+targetPage).classList.add('active');
-  const navBtn = document.querySelector(`nav button[data-page="${targetPage}"]`);
+  const navBtn = document.querySelector(`nav.page-nav button[data-page="${targetPage}"]`);
   if (navBtn) navBtn.classList.add('active');
   if (targetPage==='dashboard') loadDashboard();
   if (targetPage==='bills')     loadBillsTable();
@@ -1013,6 +1035,11 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
+  applyThemePreference(getThemePreference());
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  media.addEventListener('change', () => {
+    if (getThemePreference() === 'system') applyThemePreference('system');
+  });
   await refreshPaymentMethodsData();
   document.querySelectorAll('.overlay').forEach(el=>
     el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); }));

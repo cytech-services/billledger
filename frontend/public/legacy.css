@@ -2,6 +2,9 @@
   --ink:#1a1a2e;--ink-mid:#3a3a5c;--ink-light:#6b6b8a;
   --paper:#f7f5f0;--paper-dark:#ece9e1;--cream:#fdfcfa;
   --border:#ddd8ce;--shadow:rgba(26,26,46,.07);
+  --header-bg:#1a1a2e;
+  --table-head-bg:#1a1a2e;
+  --table-head-text:rgba(255,255,255,.72);
   --accent:#b5703a;--accent-light:#f5e6d3;--accent-dark:#8f5629;
   --green:#2e7d56;--green-light:#d4eddf;--green-dark:#1f5c3e;
   --red:#b52a2a;--red-light:#fce8e8;
@@ -10,15 +13,50 @@
   --purple:#6b3fa0;--purple-light:#ede0f8;
   --radius:11px;
 }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]){
+    --ink:#e8eaf6;--ink-mid:#c8cce0;--ink-light:#9ea6c2;
+    --paper:#11131a;--paper-dark:#1a1e29;--cream:#161a24;
+    --border:#2b3142;--shadow:rgba(0,0,0,.45);
+    --header-bg:#0b0e14;
+    --table-head-bg:#0b0e14;
+    --table-head-text:rgba(255,255,255,.8);
+    --accent:#d49a64;--accent-light:#2c2116;--accent-dark:#e2ae7d;
+    --green:#56b889;--green-light:#1a3328;--green-dark:#3e9f73;
+    --red:#dd6666;--red-light:#351d1d;
+    --amber:#e0a63a;--amber-light:#372a14;
+    --blue:#73a5ff;--blue-light:#1a2a4a;
+    --purple:#b693ff;--purple-light:#2d2247;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e8eaf6;--ink-mid:#c8cce0;--ink-light:#9ea6c2;
+  --paper:#11131a;--paper-dark:#1a1e29;--cream:#161a24;
+  --border:#2b3142;--shadow:rgba(0,0,0,.45);
+  --header-bg:#0b0e14;
+  --table-head-bg:#0b0e14;
+  --table-head-text:rgba(255,255,255,.8);
+  --accent:#d49a64;--accent-light:#2c2116;--accent-dark:#e2ae7d;
+  --green:#56b889;--green-light:#1a3328;--green-dark:#3e9f73;
+  --red:#dd6666;--red-light:#351d1d;
+  --amber:#e0a63a;--amber-light:#372a14;
+  --blue:#73a5ff;--blue-light:#1a2a4a;
+  --purple:#b693ff;--purple-light:#2d2247;
+}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);font-size:14px;min-height:100vh}
-header{background:var(--ink);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+header{background:var(--header-bg);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
 .logo{font-family:'DM Serif Display',serif;font-size:20px;color:#fff;display:flex;align-items:center;gap:8px}
 .logo span{color:var(--accent)}
-nav{display:flex;gap:3px}
-nav button{background:none;border:none;color:rgba(255,255,255,.5);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:7px 15px;border-radius:7px;cursor:pointer;transition:all .15s}
-nav button:hover{background:rgba(255,255,255,.1);color:#fff}
-nav button.active{background:var(--accent);color:#fff}
+nav.page-nav{display:flex;gap:3px}
+nav.page-nav button{background:none;border:none;color:rgba(255,255,255,.6);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:7px 15px;border-radius:7px;cursor:pointer;transition:all .15s}
+nav.page-nav button:hover{background:rgba(255,255,255,.1);color:#fff}
+nav.page-nav button.active{background:var(--accent);color:#fff}
+.theme-switch-wrap{display:flex;align-items:center;gap:8px}
+.theme-switch-label{font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:rgba(255,255,255,.7);font-weight:700}
+.theme-switch{appearance:none;-webkit-appearance:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:7px;padding:6px 10px;font-size:12px;min-width:88px;cursor:pointer}
+.theme-switch:focus{outline:none;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.theme-switch option{color:#111;background:#fff}
 main{max-width:1100px;margin:0 auto;padding:28px 20px}
 .page{display:none}.page.active{display:block}
 /* CARDS */
@@ -73,8 +111,8 @@ main{max-width:1100px;margin:0 auto;padding:28px 20px}
 /* TABLE */
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-thead tr{background:var(--ink)}
-thead th{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:rgba(255,255,255,.65);padding:11px 13px;text-align:left;white-space:nowrap}
+thead tr{background:var(--table-head-bg);border-bottom:1px solid var(--border)}
+thead th{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--table-head-text);padding:11px 13px;text-align:left;white-space:nowrap}
 tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
 tbody tr:hover{background:var(--accent-light)}
 tbody td{padding:11px 13px;font-size:13px}

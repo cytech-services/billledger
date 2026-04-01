@@ -1,12 +1,20 @@
 <header>
   <div class="logo">Bill<span>·</span>Ledger</div>
-  <nav>
+  <nav class="page-nav">
     <button class="active" data-page="dashboard" onclick="nav('dashboard')">Dashboard</button>
     <button data-page="bills" onclick="nav('bills')">My Bills</button>
     <button data-page="yearview" onclick="nav('yearview')">Year View</button>
     <button data-page="log" onclick="nav('log')">Payment Log</button>
     <button data-page="settings" onclick="nav('settings')">Settings</button>
   </nav>
+  <div class="theme-switch-wrap">
+    <label for="theme-select" class="theme-switch-label">Theme</label>
+    <select id="theme-select" class="theme-switch" onchange="setThemePreference(this.value)">
+      <option value="system">System</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  </div>
 </header>
 <main>
 
