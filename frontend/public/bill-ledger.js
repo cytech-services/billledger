@@ -740,6 +740,7 @@ function addCustomDate(val='') {
   customDates.push(val); renderCustomDates();
 }
 function removeCustomDate(i) {
+  if (!confirm('Remove this custom date?')) return;
   customDates.splice(i,1); renderCustomDates();
 }
 function renderCustomDates() {
@@ -828,6 +829,7 @@ async function confirmPay() {
   finally { const btn=document.getElementById('confirm-pay-btn'); btn.innerHTML='Record Payment'; btn.disabled=false; }
 }
 async function undoPayment(billId) {
+  if (!confirm('Remove the most recent payment for this bill?')) return;
   try {
     const pays = await api('GET',`/api/payments?bill_id=${billId}`);
     if (!pays.length) return;
@@ -872,6 +874,7 @@ async function loadLog() {
   } catch(e) { toast('Error: '+e.message,'err'); }
 }
 async function deleteLog(id) {
+  if (!confirm('Remove this payment record?')) return;
   try { await api('DELETE',`/api/payments/${id}`); toast('Payment removed.'); loadLog(); }
   catch(e) { toast('Error: '+e.message,'err'); }
 }
