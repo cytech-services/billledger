@@ -481,8 +481,8 @@ function getCycleStart(bill, nd) {
 // ── Dashboard ────────────────────────────────────────────────────────────
 async function loadDashboard() {
   try {
-    const [bills, payments, summary] = await Promise.all([
-      api('GET','/api/bills'), api('GET','/api/payments'), api('GET','/api/summary')
+    const [bills, payments] = await Promise.all([
+      api('GET','/api/bills'), api('GET','/api/payments')
     ]);
     await Promise.all(
       bills
@@ -513,16 +513,20 @@ async function loadDashboard() {
       if (!nd) return false;
       return nd.getFullYear() === t.getFullYear() && nd.getMonth() === t.getMonth();
     });
+    const monthKey = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`;
+    const paidThisMonthPayments = payments.filter((p) => String(p.paid_date || '').startsWith(monthKey));
     document.getElementById('s-overdue').textContent = overdue.length;
     document.getElementById('s-soon').textContent    = soon.length;
     document.getElementById('s-due-month-count').textContent = dueThisMonth.length;
+    document.getElementById('s-paid-month-count').textContent = paidThisMonthPayments.length;
     const amtOverdue = overdue.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
     const amtSoon = soon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
     const amtDueThisMonth = dueThisMonth.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+    const amtPaidThisMonth = paidThisMonthPayments.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
     document.getElementById('s-overdue-amount').textContent  = fmtMoney(amtOverdue);
     document.getElementById('s-soon-amount').textContent  = fmtMoney(amtSoon);
     document.getElementById('s-due-month-amount').textContent = fmtMoney(amtDueThisMonth);
-    document.getElementById('s-paid-month').textContent = fmtMoney(summary.paid_this_month);
+    document.getElementById('s-paid-month-amount').textContent = fmtMoney(amtPaidThisMonth);
     renderGroup('g-overdue',  overdue,  'overdue',  'No overdue bills 🎉');
     renderGroup('g-soon',     soon,     'due-soon', 'Nothing due in the next 15 days');
     renderGroup('g-upcoming', upcoming, 'upcoming', 'No upcoming bills');
@@ -616,7 +620,7 @@ async function loadYearView() {
         <div class="card blue"><div class="card-label">Total Bills</div><div class="card-value">${data.count}</div></div>
         <div class="card purple"><div class="card-label">Total Scheduled</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_total)}</div></div>
         <div class="card amber"><div class="card-label">Unpaid / Upcoming</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_unpaid)}</div></div>
-        <div class="card green"><div class="card-label">Already Paid</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_total-data.year_unpaid)}</div></div>
+        <div class="card green"><div class="card-label">Already Paid</div><div class="card-value" style="font-size:20px">${fmtMoney(data.year_paid_total)}</div></div>
       </div>`;
     if (!data.months.length) {
       document.getElementById('year-content').innerHTML = '<div class="none-msg" style="padding:40px">No bills scheduled for this year.</div>';

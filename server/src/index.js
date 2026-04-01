@@ -783,6 +783,9 @@ app.get('/api/year-view', (req, res) => {
   const allPayments = db
     .prepare('SELECT * FROM payments WHERE paid_date BETWEEN ? AND ?')
     .all(formatDate(buffer), formatDate(end));
+  const yearPaidTotal = db
+    .prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE paid_date BETWEEN ? AND ?')
+    .get(formatDate(yearStart), formatDate(end)).total;
 
   const payMap = new Map();
   for (const p of allPayments) {
@@ -872,6 +875,7 @@ app.get('/api/year-view', (req, res) => {
     year_unpaid: allOccurrences
       .filter((occ) => occ.status !== 'paid')
       .reduce((sum, occ) => sum + (occ.amount || 0), 0),
+    year_paid_total: Number(yearPaidTotal || 0),
     count: allOccurrences.length,
     months: Object.entries(months)
       .sort(([a], [b]) => a.localeCompare(b))
