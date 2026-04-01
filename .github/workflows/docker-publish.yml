@@ -33,8 +33,10 @@ jobs:
       - name: Normalize image owner/repo
         id: vars
         run: |
-          echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
-          echo "repo_lc=${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]' | awk '{print "repo_lc="$0}' >> "$GITHUB_OUTPUT"
+          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo_lc="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
+          echo "owner_lc=${owner_lc}" >> "$GITHUB_OUTPUT"
+          echo "repo_lc=${repo_lc}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (api)
         id: meta_api
