@@ -1,14 +1,15 @@
-FROM node:20-alpine AS build
+FROM node:20-bookworm-slim AS build
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+# Skip postinstall (nuxt prepare) during install; build runs explicitly later.
+RUN npm ci --ignore-scripts
 
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runtime
+FROM node:20-bookworm-slim AS runtime
 
 WORKDIR /app
 
