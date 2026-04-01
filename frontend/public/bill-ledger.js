@@ -553,6 +553,9 @@ function billRowHTML(bill, status) {
   const btn = status==='paid'
     ? `<button class="btn btn-undo btn-sm" onclick="undoPayment(${bill.id})">Undo</button>`
     : `<button class="btn btn-pay btn-sm" onclick="openPay(${bill.id})">Mark Paid</button>`;
+  const paidAmount = status==='paid' && bill._lastPay && bill._lastPay.amount!=null
+    ? `<div class="b-paid-amt">${fmtMoney(bill._lastPay.amount)}</div>`
+    : '';
   return `<div class="brow ${status}">
     <div>
       <div class="b-name" onclick="openDetail(${bill.id})">${esc(bill.name)}</div>
@@ -560,7 +563,10 @@ function billRowHTML(bill, status) {
       <span class="b-freq">${bill.frequency}</span>${bill.autopay==='Yes'?'<span class="autopay-tag">AUTO-PAY</span>':''}
     </div>
     <div><div class="b-due">${nd?fmtDate(nd):'—'}</div><div class="b-days">${daysLabel}</div></div>
-    <div class="b-amt">${bill.amount?fmtMoney(bill.amount):'—'}</div>
+    <div class="b-amt-wrap">
+      <div class="b-amt">${bill.amount?fmtMoney(bill.amount):'—'}</div>
+      ${paidAmount}
+    </div>
     <div></div>
     <div><span class="badge ${status}">${labels[status]}</span></div>
     ${btn}
@@ -641,13 +647,19 @@ function yearRowHTML(o) {
   const paidInfo = o.status==='paid' && o.paid_date ? `<span style="font-size:11px;color:var(--green)">Paid ${fmtDate(o.paid_date)}${o.paid_by?' by '+esc(o.paid_by):''}</span>` : '';
   const canPay = o.status==='overdue' || o.status==='upcoming';
   const actionBtn = canPay ? `<button class="btn btn-pay btn-sm" onclick="openPayFromYear(${o.bill_id})">Mark Paid</button>` : '';
+  const paidAmount = o.status==='paid' && o.paid_amount!=null
+    ? `<div class="y-paid-amt">${fmtMoney(o.paid_amount)}</div>`
+    : '';
   return `<div class="yrow ${o.status}">
     <div class="y-date">${fmtDate(o.due_date)}</div>
     <div><div class="y-name" onclick="openDetail(${o.bill_id})">${esc(o.bill_name)}</div>
       <div class="y-co">${esc(o.company)}${o.autopay==='Yes'?' · AUTO-PAY':''}</div>
       ${paidInfo}
     </div>
-    <div class="y-amt">${fmtMoney(o.amount)}</div>
+    <div class="y-amt-wrap">
+      <div class="y-amt">${fmtMoney(o.amount)}</div>
+      ${paidAmount}
+    </div>
     <div><span class="y-freq">${o.frequency}</span></div>
     <div><span class="badge ${o.status}">${labels[o.status]}</span></div>
     <div>${actionBtn}</div>
@@ -899,6 +911,7 @@ async function loadLog() {
     if (m) params.push('month='+m);
     if (params.length) url+='?'+params.join('&');
     const pays=await api('GET',url);
+    const billAmountById = new Map(bills.map((b)=>[b.id, b.amount]));
     const list=document.getElementById('log-list'), empty=document.getElementById('log-empty');
     if (!pays.length) { list.innerHTML=''; empty.style.display='block'; return; }
     empty.style.display='none';
@@ -909,7 +922,7 @@ async function loadLog() {
           ${p.confirm_num?`<div class="l-sub">Ref: ${esc(p.confirm_num)}</div>`:''}
           ${p.notes?`<div class="l-sub">${esc(p.notes)}</div>`:''}
         </div>
-        <div class="l-amt">${fmtMoney(p.amount)}</div>
+        <div class="l-amt">${fmtMoney(p.amount)}<span class="l-due-amt"> (${fmtMoney(billAmountById.get(p.bill_id))})</span></div>
         <div class="l-meta">
           ${p.method?esc(p.method):''}
           ${p.paid_by?'<br>Paid by: <strong>'+esc(p.paid_by)+'</strong>':''}

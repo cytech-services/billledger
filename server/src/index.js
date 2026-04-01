@@ -849,7 +849,8 @@ app.get('/api/year-view', (req, res) => {
         autopay: bill.autopay,
         status,
         paid_date: paymentEntry ? paymentEntry.paid_date : null,
-        paid_by: paymentEntry ? paymentEntry.paid_by : null
+        paid_by: paymentEntry ? paymentEntry.paid_by : null,
+        paid_amount: paymentEntry ? paymentEntry.amount : null
       });
     }
   }

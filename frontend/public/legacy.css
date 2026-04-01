@@ -47,6 +47,8 @@ main{max-width:1100px;margin:0 auto;padding:28px 20px}
 .brow.upcoming::before{background:var(--blue)}.brow.paid::before{background:var(--green)}
 .brow.paid{opacity:.82}
 .brow.paid .b-days{color:var(--green-dark);font-weight:600}
+.b-amt-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.b-paid-amt{font-size:11px;color:var(--green);line-height:1}
 .b-name{font-weight:600;font-size:14px;color:var(--ink);cursor:pointer;text-decoration:none}
 .b-name:hover{color:var(--accent);text-decoration:underline}
 .b-co{font-size:12px;color:var(--ink-light);margin-top:1px}
@@ -108,6 +110,7 @@ textarea{resize:vertical;min-height:65px}
 .l-date{font-size:12px;color:var(--ink-light)}
 .l-name{font-weight:600;font-size:14px}.l-sub{font-size:11px;color:var(--ink-light);margin-top:2px}
 .l-amt{font-family:'DM Serif Display',serif;font-size:16px;color:var(--green);text-align:right}
+.l-due-amt{color:var(--ink);font-size:12px}
 .l-meta{font-size:12px;color:var(--ink-light);line-height:1.6}
 .log-actions{display:flex;gap:8px}
 /* YEAR VIEW */
@@ -133,7 +136,9 @@ textarea{resize:vertical;min-height:65px}
 .y-name{font-weight:600;font-size:13px;cursor:pointer}
 .y-name:hover{color:var(--accent);text-decoration:underline}
 .y-co{font-size:11px;color:var(--ink-light)}
+.y-amt-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .y-amt{font-family:'DM Serif Display',serif;font-size:15px;text-align:right}
+.y-paid-amt{font-size:11px;color:var(--green);line-height:1}
 .y-freq{font-size:10px;font-weight:700;background:var(--paper-dark);color:var(--ink-light);padding:2px 7px;border-radius:20px}
 /* SETTINGS */
 .settings-wrap{display:grid;grid-template-columns:220px 1fr;gap:18px}
