@@ -1,6 +1,8 @@
 bills.db
 bills.db-wal
 bills.db-shm
+backups/
+*.db.bak
 node_modules/
 **/node_modules/
 .nuxt/

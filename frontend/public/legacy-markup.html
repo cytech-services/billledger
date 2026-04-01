@@ -79,6 +79,7 @@
   <div class="settings-wrap">
     <aside class="settings-side">
       <button class="active" id="st-tab-methods" onclick="navSettingsTab('methods')">Payment Methods</button>
+      <button id="st-tab-backups" onclick="navSettingsTab('backups')">Backups</button>
     </aside>
     <section class="settings-content">
       <div class="settings-pane active" id="st-pane-methods">
@@ -92,6 +93,16 @@
         </div>
         <div class="method-list" id="st-method-list">
           <div class="none-msg">Loading methods...</div>
+        </div>
+      </div>
+      <div class="settings-pane" id="st-pane-backups">
+        <div class="sec-title">Database Backups</div>
+        <div class="method-meta" id="st-backup-status" style="margin-bottom:10px">Loading backup status...</div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+          <button class="btn btn-primary" id="st-manual-backup-btn" onclick="runManualBackup()">Run Manual Backup</button>
+        </div>
+        <div class="method-list" id="st-backup-list">
+          <div class="none-msg">Loading backups...</div>
         </div>
       </div>
     </section>

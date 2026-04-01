@@ -1,4 +1,6 @@
 const path = require('path');
+const fs = require('fs');
+const fsp = require('fs/promises');
 const Database = require('better-sqlite3');
 const express = require('express');
 const cors = require('cors');
@@ -6,10 +8,100 @@ const cors = require('cors');
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', '..', 'bills.db');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(path.dirname(DB_PATH), 'backups');
+const BACKUP_RETENTION_DAYS = Number(process.env.BACKUP_RETENTION_DAYS || 30);
 
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+let db = null;
+
+function connectDb() {
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+}
+
+function ensureBackupDir() {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+function backupFileName(reason = 'manual') {
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  return `bills-${reason}-${stamp}.db`;
+}
+
+function parseBackupReason(filename) {
+  const m = /^bills-([a-z-]+)-\d{8}-\d{6}\.db$/i.exec(filename);
+  return m ? m[1].toLowerCase() : 'unknown';
+}
+
+async function createBackup(reason = 'manual') {
+  ensureBackupDir();
+  const filename = backupFileName(reason);
+  const fullPath = path.join(BACKUP_DIR, filename);
+  await db.backup(fullPath);
+  const stat = await fsp.stat(fullPath);
+  return {
+    filename,
+    size: stat.size,
+    created_at: stat.mtime.toISOString(),
+    reason
+  };
+}
+
+async function listBackups() {
+  ensureBackupDir();
+  const files = await fsp.readdir(BACKUP_DIR);
+  const dbFiles = files.filter((f) => f.endsWith('.db')).sort().reverse();
+  const result = [];
+  for (const filename of dbFiles) {
+    const stat = await fsp.stat(path.join(BACKUP_DIR, filename));
+    result.push({
+      filename,
+      size: stat.size,
+      created_at: stat.mtime.toISOString(),
+      reason: parseBackupReason(filename)
+    });
+  }
+  return result;
+}
+
+async function getBackupStatus() {
+  const all = await listBackups();
+  const lastAutomatic = all.find((b) => b.reason === 'scheduled') || null;
+  return {
+    retention_days: BACKUP_RETENTION_DAYS,
+    backup_dir: BACKUP_DIR,
+    total_backups: all.length,
+    last_automatic_backup: lastAutomatic
+  };
+}
+
+async function pruneOldBackups() {
+  ensureBackupDir();
+  const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const files = await fsp.readdir(BACKUP_DIR);
+  for (const filename of files) {
+    if (!filename.endsWith('.db')) continue;
+    const fullPath = path.join(BACKUP_DIR, filename);
+    const stat = await fsp.stat(fullPath);
+    if (stat.mtimeMs < cutoff) {
+      await fsp.unlink(fullPath);
+    }
+  }
+}
+
+function startDailyBackupScheduler() {
+  const intervalMs = 24 * 60 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      await createBackup('scheduled');
+      await pruneOldBackups();
+      console.log('Scheduled backup complete.');
+    } catch (err) {
+      console.error('Scheduled backup failed:', err.message);
+    }
+  }, intervalMs);
+}
 
 function initDb() {
   db.exec(`
@@ -223,6 +315,75 @@ function getBillById(id) {
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get('/api/backups', async (_req, res) => {
+  const backups = await listBackups();
+  res.json(backups);
+});
+
+app.get('/api/backups/status', async (_req, res) => {
+  const status = await getBackupStatus();
+  res.json(status);
+});
+
+app.post('/api/backups', async (_req, res) => {
+  const backup = await createBackup('manual');
+  await pruneOldBackups();
+  res.status(201).json({ ok: true, backup });
+});
+
+app.post('/api/backups/restore', async (req, res) => {
+  const filename = path.basename(String(req.body?.filename || '').trim());
+  if (!filename || !filename.endsWith('.db')) {
+    res.status(400).json({ error: 'Valid backup filename is required' });
+    return;
+  }
+
+  const backupPath = path.join(BACKUP_DIR, filename);
+  try {
+    await fsp.access(backupPath);
+  } catch {
+    res.status(404).json({ error: 'Backup not found' });
+    return;
+  }
+
+  // Always create a restore-point backup before replacing the live DB file.
+  await createBackup('pre-restore');
+
+  db.close();
+  for (const suffix of ['-wal', '-shm']) {
+    try {
+      await fsp.unlink(`${DB_PATH}${suffix}`);
+    } catch {
+      // ignore missing sidecar files
+    }
+  }
+
+  await fsp.copyFile(backupPath, DB_PATH);
+  connectDb();
+  initDb();
+  seedPaymentMethods();
+
+  res.json({ ok: true, restored_from: filename });
+});
+
+app.get('/api/backups/:filename/download', async (req, res) => {
+  const filename = path.basename(String(req.params.filename || '').trim());
+  if (!filename || !filename.endsWith('.db')) {
+    res.status(400).json({ error: 'Valid backup filename is required' });
+    return;
+  }
+
+  const backupPath = path.join(BACKUP_DIR, filename);
+  try {
+    await fsp.access(backupPath);
+  } catch {
+    res.status(404).json({ error: 'Backup not found' });
+    return;
+  }
+
+  res.download(backupPath, filename);
 });
 
 app.get('/api/bills', (_req, res) => {
@@ -620,10 +781,14 @@ app.get('/api/summary', (_req, res) => {
   });
 });
 
+connectDb();
 initDb();
 seedPaymentMethods();
+ensureBackupDir();
+startDailyBackupScheduler();
 
 app.listen(PORT, () => {
   console.log(`Bill Ledger API running on http://127.0.0.1:${PORT}`);
   console.log(`Using database at: ${DB_PATH}`);
+  console.log(`Backups directory: ${BACKUP_DIR}`);
 });

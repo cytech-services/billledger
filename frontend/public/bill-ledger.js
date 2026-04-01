@@ -7,9 +7,11 @@ let currentYear = new Date().getFullYear();
 let currentSettingsTab = 'methods';
 let paymentMethods = [];
 let paymentMethodStats = {};
+let backups = [];
+let backupStatus = null;
 const DEFAULT_METHOD_OPTIONS = ['Credit Card','Debit Card','Bank Transfer','Check','Cash','Auto-Pay'];
 const VALID_PAGES = ['dashboard','bills','yearview','log','settings'];
-const VALID_SETTINGS_TABS = ['methods'];
+const VALID_SETTINGS_TABS = ['methods', 'backups'];
 
 // ── API ─────────────────────────────────────────────────────────────────
 async function api(method, url, body) {
@@ -78,6 +80,19 @@ async function refreshPaymentMethodsData() {
   await loadPaymentMethods();
   await loadPaymentMethodStats();
   renderSettingsPaymentMethods();
+}
+
+function fmtBytes(bytes) {
+  const n = Number(bytes || 0);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString();
 }
 
 async function savePaymentMethodOption(methodName) {
@@ -198,6 +213,93 @@ function removePaymentMethodFromSettingsByIndex(index) {
   removePaymentMethodFromSettings(name);
 }
 
+async function loadBackups() {
+  const [items, status] = await Promise.all([
+    api('GET', '/api/backups'),
+    api('GET', '/api/backups/status')
+  ]);
+  backups = items;
+  backupStatus = status;
+  renderBackupStatus();
+  renderSettingsBackups();
+}
+
+function renderBackupStatus() {
+  const el = document.getElementById('st-backup-status');
+  if (!el) return;
+  if (!backupStatus) {
+    el.textContent = 'Unable to load backup status.';
+    return;
+  }
+  const last = backupStatus.last_automatic_backup;
+  if (!last) {
+    el.textContent = `No automatic backup has run yet. Daily backups are enabled. Retention: ${backupStatus.retention_days} days.`;
+    return;
+  }
+  el.textContent = `Last automatic backup: ${fmtDateTime(last.created_at)} (${fmtBytes(last.size)}). Retention: ${backupStatus.retention_days} days.`;
+}
+
+function renderSettingsBackups() {
+  const el = document.getElementById('st-backup-list');
+  if (!el) return;
+  if (!backups.length) {
+    el.innerHTML = '<div class="none-msg">No backups found yet.</div>';
+    return;
+  }
+  el.innerHTML = backups.map((b, i) => `
+    <div class="method-row">
+      <div>
+        <div class="method-name">${esc(b.filename)}</div>
+        <div class="method-meta">${fmtDateTime(b.created_at)} · ${fmtBytes(b.size)}</div>
+      </div>
+      <div class="backup-actions">
+        <button class="btn btn-ghost btn-sm" onclick="downloadBackupByIndex(${i})">Download</button>
+        <button class="btn btn-danger btn-sm" onclick="restoreBackupByIndex(${i})">Restore</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function runManualBackup() {
+  const btn = document.getElementById('st-manual-backup-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+  try {
+    await api('POST', '/api/backups');
+    await loadBackups();
+    toast('Manual backup created.','ok');
+  } catch (e) {
+    toast('Backup failed: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Run Manual Backup'; }
+  }
+}
+
+function downloadBackupByIndex(index) {
+  const item = backups[index];
+  if (!item) return;
+  const base = window.BILLLEDGER_API_BASE || 'http://127.0.0.1:3001';
+  const url = `${base}/api/backups/${encodeURIComponent(item.filename)}/download`;
+  window.open(url, '_blank');
+}
+
+async function restoreBackupByIndex(index) {
+  const item = backups[index];
+  if (!item) return;
+  const ok = confirm(`Restore backup "${item.filename}"?\n\nThis will replace the current database and cannot be undone except by another backup.`);
+  if (!ok) return;
+  try {
+    await api('POST', '/api/backups/restore', { filename: item.filename });
+    await Promise.all([loadBackups(), refreshPaymentMethodsData()]);
+    toast('Backup restored successfully. Refreshing dashboard...','ok');
+    loadDashboard();
+    loadBillsTable();
+    loadLog();
+    loadYearView();
+  } catch (e) {
+    toast('Restore failed: ' + e.message, 'err');
+  }
+}
+
 function switchSettingsTab(tab, btn) {
   const safeTab = VALID_SETTINGS_TABS.includes(String(tab || '').toLowerCase()) ? String(tab || '').toLowerCase() : 'methods';
   currentSettingsTab = safeTab;
@@ -208,12 +310,17 @@ function switchSettingsTab(tab, btn) {
   const pane = document.getElementById(`st-pane-${safeTab}`);
   if (pane) pane.classList.add('active');
   if (safeTab==='methods') renderSettingsPaymentMethods();
+  if (safeTab==='backups') renderSettingsBackups();
 }
 
 async function loadSettingsPage() {
   const tabButton = document.getElementById(`st-tab-${currentSettingsTab}`);
   switchSettingsTab(currentSettingsTab, tabButton);
-  await refreshPaymentMethodsData();
+  if (currentSettingsTab === 'methods') {
+    await refreshPaymentMethodsData();
+  } else if (currentSettingsTab === 'backups') {
+    await loadBackups();
+  }
 }
 
 // ── Navigation ──────────────────────────────────────────────────────────
