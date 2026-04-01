@@ -185,6 +185,29 @@
   </div>
 </div>
 
+<!-- ═══ EDIT PAYMENT MODAL ═══ -->
+<div class="overlay" id="m-pay-edit">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">Edit Payment</div>
+    <div class="pay-info" id="pe-info"></div>
+    <div class="fgrid">
+      <div class="fg full"><label>Date Paid *</label><input type="date" id="pe-date"></div>
+      <div class="fg full"><label>Amount Paid ($)</label><input type="number" id="pe-amount" step="0.01"></div>
+      <div class="fg full">
+        <label>Paid With (method / card)</label>
+        <input id="pe-method" list="pay-method-suggestions">
+      </div>
+      <div class="fg full"><label>Paid By (person)</label><input id="pe-paid-by"></div>
+      <div class="fg full"><label>Confirmation #</label><input id="pe-confirm"></div>
+      <div class="fg full"><label>Notes</label><input id="pe-notes"></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeM('m-pay-edit')">Cancel</button>
+      <button class="btn btn-primary" id="save-pay-edit-btn" onclick="savePaymentEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ BILL DETAIL MODAL ═══ -->
 <div class="overlay" id="m-detail">
   <div class="modal detail-modal">

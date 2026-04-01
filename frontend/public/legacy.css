@@ -109,6 +109,7 @@ textarea{resize:vertical;min-height:65px}
 .l-name{font-weight:600;font-size:14px}.l-sub{font-size:11px;color:var(--ink-light);margin-top:2px}
 .l-amt{font-family:'DM Serif Display',serif;font-size:16px;color:var(--green);text-align:right}
 .l-meta{font-size:12px;color:var(--ink-light);line-height:1.6}
+.log-actions{display:flex;gap:8px}
 /* YEAR VIEW */
 .year-nav{display:flex;align-items:center;gap:16px;margin-bottom:24px}
 .year-nav-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;cursor:pointer;font-size:18px;color:var(--ink-light);transition:all .15s}
@@ -120,7 +121,7 @@ textarea{resize:vertical;min-height:65px}
 .month-name{font-family:'DM Serif Display',serif;font-size:18px;color:var(--ink)}
 .month-total{font-size:13px;color:var(--ink-light)}
 .month-total strong{color:var(--ink);font-family:'DM Serif Display',serif;font-size:16px}
-.yrow{background:var(--cream);border:1px solid var(--border);border-radius:9px;padding:11px 16px;display:grid;grid-template-columns:100px 1fr 100px 80px 100px;align-items:center;gap:10px;margin-bottom:6px;position:relative;overflow:hidden;transition:box-shadow .15s}
+.yrow{background:var(--cream);border:1px solid var(--border);border-radius:9px;padding:11px 16px;display:grid;grid-template-columns:100px 1fr 100px 80px 100px auto;align-items:center;gap:10px;margin-bottom:6px;position:relative;overflow:hidden;transition:box-shadow .15s}
 .yrow:hover{box-shadow:0 3px 14px var(--shadow)}
 .yrow::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
 .yrow.overdue::before{background:var(--red)}.yrow.due-soon::before{background:var(--amber)}

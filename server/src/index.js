@@ -192,7 +192,15 @@ function seedPaymentMethods() {
 }
 
 function isoDate(input) {
-  const d = new Date(`${input}T00:00:00`);
+  const s = String(input || '').trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) {
+    throw new Error(`Invalid date: ${input}`);
+  }
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const d = new Date(year, month - 1, day);
   if (Number.isNaN(d.getTime())) {
     throw new Error(`Invalid date: ${input}`);
   }
@@ -292,8 +300,14 @@ function calcOccurrences(bill, startDate, endDate) {
   if (!bill.next_date) return [];
 
   let anchor = isoDate(bill.next_date);
-  // For anchored schedules (Quarterly/Bi-Weekly/etc.), next_date is the
-  // first valid occurrence and should not backfill prior cycles.
+  if (anchor > startDate) {
+    while (anchor > startDate) {
+      const shifted = shiftDate(anchor, freq, -1);
+      if (!shifted) break;
+      anchor = shifted;
+    }
+  }
+
   while (anchor < startDate) {
     const shifted = shiftDate(anchor, freq, 1);
     if (!shifted) break;
@@ -674,6 +688,32 @@ app.post('/api/payments', (req, res) => {
 
   tx();
   res.status(201).json({ ok: true });
+});
+
+app.put('/api/payments/:id', (req, res) => {
+  const paymentId = Number(req.params.id);
+  const d = req.body || {};
+  const existing = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
+  if (!existing) {
+    res.status(404).json({ error: 'Payment not found' });
+    return;
+  }
+
+  const paidDate = d.paid_date || existing.paid_date;
+  const amount = d.amount == null || d.amount === '' ? existing.amount : d.amount;
+  const method = d.method == null ? existing.method : d.method;
+  const paidBy = d.paid_by == null ? existing.paid_by : d.paid_by;
+  const confirmNum = d.confirm_num == null ? existing.confirm_num : d.confirm_num;
+  const notes = d.notes == null ? existing.notes : d.notes;
+
+  db.prepare(
+    `UPDATE payments
+     SET paid_date = ?, amount = ?, method = ?, paid_by = ?, confirm_num = ?, notes = ?
+     WHERE id = ?`
+  ).run(paidDate, amount, method, paidBy, confirmNum, notes, paymentId);
+
+  savePaymentMethod(method);
+  res.json({ ok: true });
 });
 
 app.delete('/api/payments/:id', (req, res) => {

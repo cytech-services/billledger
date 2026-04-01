@@ -1,6 +1,7 @@
 // ── State ───────────────────────────────────────────────────────────────
 let allBills = [];
 let payingBillId = null;
+let editingPaymentId = null;
 let editingBillId = null;
 let customDates = [];
 let currentYear = new Date().getFullYear();
@@ -594,6 +595,8 @@ async function loadYearView() {
 function yearRowHTML(o) {
   const labels={overdue:'⚠ Overdue','due-soon':'⏰ Due Soon',upcoming:'📅 Upcoming',paid:'✅ Paid'};
   const paidInfo = o.status==='paid' && o.paid_date ? `<span style="font-size:11px;color:var(--green)">Paid ${fmtDate(o.paid_date)}${o.paid_by?' by '+esc(o.paid_by):''}</span>` : '';
+  const canPay = o.status==='overdue' || o.status==='upcoming';
+  const actionBtn = canPay ? `<button class="btn btn-pay btn-sm" onclick="openPayFromYear(${o.bill_id})">Mark Paid</button>` : '';
   return `<div class="yrow ${o.status}">
     <div class="y-date">${fmtDate(o.due_date)}</div>
     <div><div class="y-name" onclick="openDetail(${o.bill_id})">${esc(o.bill_name)}</div>
@@ -603,9 +606,17 @@ function yearRowHTML(o) {
     <div class="y-amt">${fmtMoney(o.amount)}</div>
     <div><span class="y-freq">${o.frequency}</span></div>
     <div><span class="badge ${o.status}">${labels[o.status]}</span></div>
+    <div>${actionBtn}</div>
   </div>`;
 }
 function changeYear(dir) { currentYear += dir; loadYearView(); }
+
+async function openPayFromYear(billId) {
+  if (!allBills.length) {
+    allBills = await api('GET','/api/bills');
+  }
+  openPay(billId);
+}
 
 // ── Bill Detail Modal ─────────────────────────────────────────────────────
 async function openDetail(billId) {
@@ -850,13 +861,72 @@ async function loadLog() {
           ${p.method?esc(p.method):''}
           ${p.paid_by?'<br>Paid by: <strong>'+esc(p.paid_by)+'</strong>':''}
         </div>
-        <button class="btn btn-danger btn-sm" onclick="deleteLog(${p.id})">Remove</button>
+        <div class="log-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openEditPayment(${p.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteLog(${p.id})">Remove</button>
+        </div>
       </div>`).join('');
   } catch(e) { toast('Error: '+e.message,'err'); }
 }
 async function deleteLog(id) {
   try { await api('DELETE',`/api/payments/${id}`); toast('Payment removed.'); loadLog(); }
   catch(e) { toast('Error: '+e.message,'err'); }
+}
+
+async function openEditPayment(paymentId) {
+  try {
+    const pays = await api('GET','/api/payments');
+    const p = pays.find((x)=>x.id===paymentId);
+    if (!p) { toast('Payment not found.','err'); return; }
+    editingPaymentId = paymentId;
+    document.getElementById('pe-info').innerHTML = `
+      <strong>${esc(p.bill_name||'Unknown Bill')}</strong><br>
+      <span style="color:var(--ink-light);font-size:12px">Payment ID: ${p.id}</span>`;
+    document.getElementById('pe-date').value = p.paid_date || '';
+    document.getElementById('pe-amount').value = p.amount ?? '';
+    document.getElementById('pe-method').value = p.method || '';
+    document.getElementById('pe-paid-by').value = p.paid_by || '';
+    document.getElementById('pe-confirm').value = p.confirm_num || '';
+    document.getElementById('pe-notes').value = p.notes || '';
+    openM('m-pay-edit');
+  } catch(e) {
+    toast('Error loading payment: '+e.message,'err');
+  }
+}
+
+async function savePaymentEdit() {
+  if (!editingPaymentId) return;
+  const paidDate = document.getElementById('pe-date').value;
+  if (!paidDate) { toast('Please enter the payment date.','err'); return; }
+  try {
+    const btn = document.getElementById('save-pay-edit-btn');
+    btn.innerHTML = '<span class="spinner"></span>';
+    btn.disabled = true;
+    const method = document.getElementById('pe-method').value.trim();
+    if (method) await savePaymentMethodOption(method);
+    await api('PUT', `/api/payments/${editingPaymentId}`, {
+      paid_date: paidDate,
+      amount: document.getElementById('pe-amount').value || null,
+      method,
+      paid_by: document.getElementById('pe-paid-by').value.trim(),
+      confirm_num: document.getElementById('pe-confirm').value.trim(),
+      notes: document.getElementById('pe-notes').value.trim()
+    });
+    closeM('m-pay-edit');
+    editingPaymentId = null;
+    toast('Payment updated.','ok');
+    loadLog();
+    loadDashboard();
+    if (document.getElementById('pg-yearview')?.classList.contains('active')) loadYearView();
+  } catch(e) {
+    toast('Error updating payment: '+e.message,'err');
+  } finally {
+    const btn = document.getElementById('save-pay-edit-btn');
+    if (btn) {
+      btn.innerHTML = 'Save Changes';
+      btn.disabled = false;
+    }
+  }
 }
 
 // ── Modals ────────────────────────────────────────────────────────────────
