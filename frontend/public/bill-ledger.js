@@ -820,7 +820,10 @@ async function confirmPay() {
       notes:       document.getElementById('p-notes').value.trim(),
     });
     const b=allBills.find(x=>x.id===payingBillId);
-    closeM('m-pay'); toast(`✅ ${b?.name||'Bill'} marked as paid!`,'ok'); loadDashboard();
+    closeM('m-pay'); toast(`✅ ${b?.name||'Bill'} marked as paid!`,'ok');
+    loadDashboard();
+    if (document.getElementById('pg-yearview')?.classList.contains('active')) loadYearView();
+    if (document.getElementById('pg-log')?.classList.contains('active')) loadLog();
   } catch(e) { toast('Error: '+e.message,'err'); }
   finally { const btn=document.getElementById('confirm-pay-btn'); btn.innerHTML='Record Payment'; btn.disabled=false; }
 }
@@ -915,8 +918,8 @@ async function savePaymentEdit() {
     closeM('m-pay-edit');
     editingPaymentId = null;
     toast('Payment updated.','ok');
-    loadLog();
     loadDashboard();
+    loadLog();
     if (document.getElementById('pg-yearview')?.classList.contains('active')) loadYearView();
   } catch(e) {
     toast('Error updating payment: '+e.message,'err');
