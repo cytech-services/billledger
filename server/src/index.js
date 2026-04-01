@@ -692,7 +692,7 @@ app.get('/api/year-view', (req, res) => {
   const today = startOfDay();
 
   const yearStart = new Date(year, 0, 1);
-  const start = today > yearStart ? today : yearStart;
+  const start = yearStart;
   const end = new Date(year, 11, 31);
 
   const bills = db.prepare(`SELECT ${BILL_FIELDS} FROM bills ORDER BY name`).all();
