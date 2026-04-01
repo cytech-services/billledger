@@ -382,6 +382,22 @@ function navSettingsTab(tab) {
 
 // ── Date helpers ─────────────────────────────────────────────────────────
 function today() { return new Date(new Date().toDateString()); }
+function estimatedTaxScheduleForYear(year) {
+  return [
+    new Date(year, 0, 15),
+    new Date(year, 3, 15),
+    new Date(year, 5, 15),
+    new Date(year, 8, 15),
+  ];
+}
+function calcEstimatedTaxNextDue(baseDate = today()) {
+  const t = new Date(baseDate);
+  const candidates = [
+    ...estimatedTaxScheduleForYear(t.getFullYear()),
+    ...estimatedTaxScheduleForYear(t.getFullYear() + 1),
+  ];
+  return candidates.find((d) => d >= t) || null;
+}
 function calcNextDue(bill) {
   const t = today(), f = bill.frequency;
   if (f==='Monthly') {
@@ -401,6 +417,9 @@ function calcNextDue(bill) {
   if (f==='Custom') {
     if (!bill._customNextDue) return null;
     return new Date(bill._customNextDue+'T00:00:00');
+  }
+  if (f==='Estimated Tax (US/NY)') {
+    return calcEstimatedTaxNextDue(t);
   }
   if (bill.next_date) {
     const d = new Date(bill.next_date+'T00:00:00');
@@ -444,6 +463,14 @@ function getStatus(bill) {
 function getCycleStart(bill, nd) {
   const d = new Date(nd);
   const f = bill.frequency;
+  if (f==='Estimated Tax (US/NY)') {
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+    if (month===1) return new Date(year - 1, 8, 15);
+    if (month===4) return new Date(year, 0, 15);
+    if (month===6) return new Date(year, 3, 15);
+    if (month===9) return new Date(year, 5, 15);
+  }
   const m = {Monthly:1,'Bi-Monthly':2,Quarterly:3,'Semi-Annual':6,Annual:12}[f];
   if (m) { d.setMonth(d.getMonth()-m); return d; }
   if (f==='Weekly') { d.setDate(d.getDate()-7); return d; }
@@ -547,6 +574,7 @@ async function loadBillsTable() {
     tbody.innerHTML = bills.map(b=>{
       const dueD = ['Monthly'].includes(b.frequency)&&b.due_day ? `Day ${b.due_day}`
                  : b.frequency==='Weekly'&&b.due_day!=null ? `Weekday ${b.due_day}`
+                 : b.frequency==='Estimated Tax (US/NY)' ? 'Jan 15, Apr 15, Jun 15, Sep 15'
                  : b.frequency==='Custom' ? 'Custom dates'
                  : b.next_date ? fmtDate(b.next_date) : '—';
       return `<tr>
@@ -714,7 +742,7 @@ async function openEdit(id) {
     document.getElementById('f-account').value = b.account||'';
     document.getElementById('f-notes').value   = b.notes||'';
     freqChange();
-    const needsDate = !['Monthly','Weekly','Custom'].includes(b.frequency);
+    const needsDate = !['Monthly','Weekly','Custom','Estimated Tax (US/NY)'].includes(b.frequency);
     document.getElementById('f-day').value = needsDate ? (b.next_date||'') : (b.due_day||'');
     renderCustomDates();
     openM('m-bill');
@@ -733,11 +761,15 @@ function freqChange() {
     Annual:       {lbl:'Next Due Date *',hint:'Enter the next upcoming due date. Advances 1 year after each payment.',type:'date',ph:''},
     Weekly:       {lbl:'Day of Week *',hint:'Enter 0=Sunday, 1=Monday, 2=Tuesday … 6=Saturday.',type:'number',ph:'e.g. 1'},
     'Bi-Weekly':  {lbl:'Next Due Date *',hint:'Enter the next upcoming due date. Advances 2 weeks after each payment.',type:'date',ph:''},
+    'Estimated Tax (US/NY)': {lbl:'Schedule',hint:'Due dates are fixed to Jan 15, Apr 15, Jun 15, and Sep 15 each year.',type:'text',ph:''},
     Custom:       {lbl:'',hint:'',type:'text',ph:''},
   };
   if (freq==='Custom') {
     fgDay.style.display='none';
     cdSection.classList.add('visible');
+  } else if (freq==='Estimated Tax (US/NY)') {
+    cdSection.classList.remove('visible');
+    fgDay.style.display='none';
   } else {
     cdSection.classList.remove('visible');
     fgDay.style.display='flex';
@@ -768,7 +800,7 @@ async function saveBill() {
   const freq=document.getElementById('f-freq').value;
   if (!name) { toast('Please enter a bill name.','err'); return; }
   if (!freq) { toast('Please select a frequency.','err'); return; }
-  const needsDate = !['Monthly','Weekly','Custom'].includes(freq);
+  const needsDate = !['Monthly','Weekly','Custom','Estimated Tax (US/NY)'].includes(freq);
   const day = document.getElementById('f-day').value;
   if (freq==='Monthly'&&!day) { toast('Please enter the due day.','err'); return; }
   if (needsDate&&!day) { toast('Please enter the next due date.','err'); return; }

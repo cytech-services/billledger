@@ -257,9 +257,35 @@ function shiftDate(d, frequency, direction = 1) {
       return addMonthsSafe(d, 6 * dir);
     case 'Annual':
       return addYearsSafe(d, 1 * dir);
+    case 'Estimated Tax (US/NY)': {
+      // Jan 15, Apr 15, Jun 15, Sep 15 schedule with variable month gaps.
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      if (dir > 0) {
+        if (month === 1) return new Date(year, 3, 15);
+        if (month === 4) return new Date(year, 5, 15);
+        if (month === 6) return new Date(year, 8, 15);
+        if (month === 9) return new Date(year + 1, 0, 15);
+      } else {
+        if (month === 1) return new Date(year - 1, 8, 15);
+        if (month === 4) return new Date(year, 0, 15);
+        if (month === 6) return new Date(year, 3, 15);
+        if (month === 9) return new Date(year, 5, 15);
+      }
+      return null;
+    }
     default:
       return null;
   }
+}
+
+function estimatedTaxDatesForYear(year) {
+  return [
+    new Date(year, 0, 15), // Jan 15
+    new Date(year, 3, 15), // Apr 15
+    new Date(year, 5, 15), // Jun 15
+    new Date(year, 8, 15), // Sep 15
+  ];
 }
 
 function calcOccurrences(bill, startDate, endDate) {
@@ -303,6 +329,18 @@ function calcOccurrences(bill, startDate, endDate) {
       result.push(formatDate(cursor));
       cursor.setDate(cursor.getDate() + 7);
     }
+    return result;
+  }
+
+  if (freq === 'Estimated Tax (US/NY)') {
+    for (let y = startDate.getFullYear() - 1; y <= endDate.getFullYear() + 1; y += 1) {
+      for (const dueDate of estimatedTaxDatesForYear(y)) {
+        if (dueDate >= startDate && dueDate <= endDate) {
+          result.push(formatDate(dueDate));
+        }
+      }
+    }
+    result.sort();
     return result;
   }
 
