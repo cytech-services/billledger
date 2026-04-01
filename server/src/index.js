@@ -200,7 +200,14 @@ function isoDate(input) {
 }
 
 function formatDate(d) {
-  return d.toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function startOfDay(d = new Date()) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 function addMonthsSafe(d, months) {
@@ -492,7 +499,7 @@ app.get('/api/bills/:id/details', (req, res) => {
     .prepare('SELECT * FROM payments WHERE bill_id = ? ORDER BY paid_date DESC LIMIT 50')
     .all(billId);
 
-  const today = new Date();
+  const today = startOfDay();
   const end = new Date(today);
   end.setDate(end.getDate() + 730);
   const upcoming = calcOccurrences(bill, today, end).slice(0, 12);
@@ -659,7 +666,7 @@ app.post('/api/payments', (req, res) => {
 
     if (bill.next_date) {
       let dt = isoDate(bill.next_date);
-      const today = new Date();
+      const today = startOfDay();
       let next = shiftDate(dt, bill.frequency, 1);
       while (next && next <= today) {
         dt = next;
@@ -682,7 +689,7 @@ app.delete('/api/payments/:id', (req, res) => {
 
 app.get('/api/year-view', (req, res) => {
   const year = Number(req.query.year || new Date().getFullYear());
-  const today = new Date();
+  const today = startOfDay();
 
   const yearStart = new Date(year, 0, 1);
   const start = today > yearStart ? today : yearStart;
@@ -768,7 +775,7 @@ app.get('/api/year-view', (req, res) => {
 });
 
 app.get('/api/summary', (_req, res) => {
-  const month = new Date().toISOString().slice(0, 7);
+  const month = formatDate(new Date()).slice(0, 7);
   const totalBills = db.prepare('SELECT COUNT(*) AS count FROM bills').get().count;
   const paidThisMonth = db
     .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE strftime('%Y-%m', paid_date) = ?")
