@@ -218,6 +218,15 @@ function startOfDay(d = new Date()) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+function paymentMatchScore(paidDateObj, dueDateObj) {
+  const dayDiff = Math.abs((paidDateObj.getTime() - dueDateObj.getTime()) / 86400000);
+  const sameMonth =
+    paidDateObj.getFullYear() === dueDateObj.getFullYear() &&
+    paidDateObj.getMonth() === dueDateObj.getMonth();
+  // Strongly prefer matching payments to occurrences in the same calendar month.
+  return (sameMonth ? 0 : 1000) + dayDiff;
+}
+
 function addMonthsSafe(d, months) {
   const originalDay = d.getDate();
   const next = new Date(d);
@@ -762,9 +771,9 @@ app.get('/api/year-view', (req, res) => {
       let bestDiff = Number.POSITIVE_INFINITY;
 
       occMatches.forEach((occ, idx) => {
-        const diff = Math.abs(paidDateObj.getTime() - occ.dueDateObj.getTime());
-        if (diff < bestDiff) {
-          bestDiff = diff;
+        const score = paymentMatchScore(paidDateObj, occ.dueDateObj);
+        if (score < bestDiff) {
+          bestDiff = score;
           bestIdx = idx;
         }
       });
