@@ -713,14 +713,38 @@ app.get('/api/year-view', (req, res) => {
   const allOccurrences = [];
   for (const bill of bills) {
     const billPays = payMap.get(bill.id) || [];
+    const occDates = calcOccurrences(bill, start, end);
+    const occMatches = occDates.map((dueDate) => ({
+      dueDate,
+      dueDateObj: isoDate(dueDate),
+      paymentEntry: null,
+      paymentDiffMs: Number.POSITIVE_INFINITY
+    }));
 
-    for (const occStr of calcOccurrences(bill, start, end)) {
-      const occDate = isoDate(occStr);
+    for (const payment of billPays) {
+      if (!occMatches.length) break;
+      const paidDateObj = isoDate(payment.paid_date);
+      let bestIdx = 0;
+      let bestDiff = Number.POSITIVE_INFINITY;
 
-      const paymentEntry = billPays.find((p) => {
-        const pd = isoDate(p.paid_date);
-        return Math.abs((pd.getTime() - occDate.getTime()) / 86400000) <= 14;
+      occMatches.forEach((occ, idx) => {
+        const diff = Math.abs(paidDateObj.getTime() - occ.dueDateObj.getTime());
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIdx = idx;
+        }
       });
+
+      if (bestDiff < occMatches[bestIdx].paymentDiffMs) {
+        occMatches[bestIdx].paymentEntry = payment;
+        occMatches[bestIdx].paymentDiffMs = bestDiff;
+      }
+    }
+
+    for (const occ of occMatches) {
+      const occStr = occ.dueDate;
+      const occDate = occ.dueDateObj;
+      const paymentEntry = occ.paymentEntry;
 
       let status = 'upcoming';
       if (paymentEntry) {
