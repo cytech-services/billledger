@@ -478,11 +478,23 @@ async function loadDashboard() {
     const soon      = bills.filter(b=>getStatus(b)==='due-soon');
     const upcoming  = bills.filter(b=>getStatus(b)==='upcoming').sort((a,b)=>(calcNextDue(a)||new Date(9e15))-(calcNextDue(b)||new Date(9e15)));
     const paid      = bills.filter(b=>getStatus(b)==='paid');
+    const t = today();
+    const dueThisMonth = bills.filter((b) => {
+      if (getStatus(b) === 'paid') return false;
+      const nd = calcNextDue(b);
+      if (!nd) return false;
+      return nd.getFullYear() === t.getFullYear() && nd.getMonth() === t.getMonth();
+    });
     document.getElementById('s-overdue').textContent = overdue.length;
     document.getElementById('s-soon').textContent    = soon.length;
-    const amtDue = [...overdue,...soon].reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
-    document.getElementById('s-due').textContent  = fmtMoney(amtDue);
-    document.getElementById('s-paid').textContent = fmtMoney(summary.paid_this_month);
+    document.getElementById('s-due-month-count').textContent = dueThisMonth.length;
+    const amtOverdue = overdue.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+    const amtSoon = soon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+    const amtDueThisMonth = dueThisMonth.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+    document.getElementById('s-overdue-amount').textContent  = fmtMoney(amtOverdue);
+    document.getElementById('s-soon-amount').textContent  = fmtMoney(amtSoon);
+    document.getElementById('s-due-month-amount').textContent = fmtMoney(amtDueThisMonth);
+    document.getElementById('s-paid-month').textContent = fmtMoney(summary.paid_this_month);
     renderGroup('g-overdue',  overdue,  'overdue',  'No overdue bills 🎉');
     renderGroup('g-soon',     soon,     'due-soon', 'Nothing due in the next 15 days');
     renderGroup('g-upcoming', upcoming, 'upcoming', 'No upcoming bills');

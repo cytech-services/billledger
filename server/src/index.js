@@ -292,14 +292,8 @@ function calcOccurrences(bill, startDate, endDate) {
   if (!bill.next_date) return [];
 
   let anchor = isoDate(bill.next_date);
-  if (anchor > startDate) {
-    while (anchor > startDate) {
-      const shifted = shiftDate(anchor, freq, -1);
-      if (!shifted) break;
-      anchor = shifted;
-    }
-  }
-
+  // For anchored schedules (Quarterly/Bi-Weekly/etc.), next_date is the
+  // first valid occurrence and should not backfill prior cycles.
   while (anchor < startDate) {
     const shifted = shiftDate(anchor, freq, 1);
     if (!shifted) break;
