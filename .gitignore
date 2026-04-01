@@ -1,0 +1,9 @@
+bills.db
+bills.db-wal
+bills.db-shm
+node_modules/
+**/node_modules/
+.nuxt/
+**/.nuxt/
+.output/
+**/.output/

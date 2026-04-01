@@ -1,0 +1,195 @@
+<header>
+  <div class="logo">Bill<span>·</span>Ledger</div>
+  <nav>
+    <button class="active" data-page="dashboard" onclick="nav('dashboard')">Dashboard</button>
+    <button data-page="bills" onclick="nav('bills')">My Bills</button>
+    <button data-page="yearview" onclick="nav('yearview')">Year View</button>
+    <button data-page="log" onclick="nav('log')">Payment Log</button>
+    <button data-page="settings" onclick="nav('settings')">Settings</button>
+  </nav>
+</header>
+<main>
+
+<!-- ═══ DASHBOARD ═══ -->
+<div class="page active" id="pg-dashboard">
+  <div class="cards">
+    <div class="card red"><div class="card-label">Overdue</div><div class="card-value" id="s-overdue">—</div></div>
+    <div class="card amber"><div class="card-label">Due Within 15 Days</div><div class="card-value" id="s-soon">—</div></div>
+    <div class="card blue"><div class="card-label">Amount Due Now</div><div class="card-value" id="s-due" style="font-size:20px">—</div></div>
+    <div class="card green"><div class="card-label">Paid This Month</div><div class="card-value" id="s-paid" style="font-size:20px">—</div></div>
+  </div>
+  <div class="sec"><div class="sec-title">⚠ Overdue</div><div class="bill-list" id="g-overdue"><div class="none-msg">Loading…</div></div></div>
+  <div class="sec"><div class="sec-title">⏰ Due Within 15 Days</div><div class="bill-list" id="g-soon"><div class="none-msg">Loading…</div></div></div>
+  <div class="sec"><div class="sec-title">📅 Upcoming</div><div class="bill-list" id="g-upcoming"><div class="none-msg">Loading…</div></div></div>
+  <div class="sec"><div class="sec-title">✅ Paid This Month</div><div class="bill-list" id="g-paid"><div class="none-msg">Loading…</div></div></div>
+</div>
+
+<!-- ═══ MY BILLS ═══ -->
+<div class="page" id="pg-bills">
+  <div class="sec-hdr">
+    <h2>My Bills</h2>
+    <button class="btn btn-primary" onclick="openAdd()">+ Add Bill</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Bill Name</th><th>Company</th><th>Frequency</th><th>Due</th><th>Amount</th><th>Auto-Pay</th><th>Method</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="bills-tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="bills-empty" style="display:none">
+    <div class="empty-icon">📋</div>
+    <h3>No bills yet</h3>
+    <p>Add each of your bills once and let Bill Ledger track everything.</p>
+    <button class="btn btn-primary" onclick="openAdd()">+ Add Your First Bill</button>
+  </div>
+</div>
+
+<!-- ═══ YEAR VIEW ═══ -->
+<div class="page" id="pg-yearview">
+  <div class="year-nav">
+    <button class="year-nav-btn" onclick="changeYear(-1)">&#8592;</button>
+    <div class="year-display" id="year-display">2026</div>
+    <button class="year-nav-btn" onclick="changeYear(1)">&#8594;</button>
+    <span style="color:var(--ink-light);font-size:13px;margin-left:8px">All scheduled payments for the year</span>
+  </div>
+  <div class="year-cards" id="year-summary"></div>
+  <div id="year-content"><div class="none-msg" style="padding:40px">Loading…</div></div>
+</div>
+
+<!-- ═══ PAYMENT LOG ═══ -->
+<div class="page" id="pg-log">
+  <div class="sec-hdr"><h2>Payment Log</h2></div>
+  <div class="log-filters">
+    <select id="lf-bill" onchange="loadLog()"><option value="">All Bills</option></select>
+    <input type="month" id="lf-month" onchange="loadLog()">
+  </div>
+  <div id="log-list"></div>
+  <div class="empty" id="log-empty" style="display:none">
+    <div class="empty-icon">📝</div>
+    <h3>No payments found</h3>
+    <p>Payments appear here when you mark bills as paid on the Dashboard.</p>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS ═══ -->
+<div class="page" id="pg-settings">
+  <div class="sec-hdr">
+    <h2>Settings</h2>
+  </div>
+  <div class="settings-wrap">
+    <aside class="settings-side">
+      <button class="active" id="st-tab-methods" onclick="navSettingsTab('methods')">Payment Methods</button>
+    </aside>
+    <section class="settings-content">
+      <div class="settings-pane active" id="st-pane-methods">
+        <div class="sec-title">Manage Payment Methods</div>
+        <div class="settings-method-form">
+          <div class="fg">
+            <label>New Method</label>
+            <input id="st-new-method" placeholder="e.g. Capital One Visa">
+          </div>
+          <button class="btn btn-primary" onclick="addPaymentMethodFromSettings()">Add</button>
+        </div>
+        <div class="method-list" id="st-method-list">
+          <div class="none-msg">Loading methods...</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+</main>
+
+<!-- ═══ ADD/EDIT BILL MODAL ═══ -->
+<div class="overlay" id="m-bill">
+  <div class="modal">
+    <div class="modal-title" id="m-bill-title">Add Bill</div>
+    <div class="fgrid">
+      <div class="fg"><label>Bill Name *</label><input id="f-name" placeholder="e.g. Electricity"></div>
+      <div class="fg"><label>Company / Provider</label><input id="f-company" placeholder="e.g. City Power Co."></div>
+      <div class="fg">
+        <label>Frequency *</label>
+        <select id="f-freq" onchange="freqChange()">
+          <option value="">Select…</option>
+          <option>Monthly</option><option>Bi-Monthly</option><option>Quarterly</option>
+          <option>Semi-Annual</option><option>Annual</option><option>Weekly</option>
+          <option>Bi-Weekly</option><option>Custom</option>
+        </select>
+      </div>
+      <div class="fg" id="fg-day">
+        <label id="day-label">Due Day *</label>
+        <input id="f-day" type="number" placeholder="e.g. 15">
+        <div class="hint" id="f-hint"></div>
+      </div>
+      <!-- Custom dates section -->
+      <div class="custom-dates-section" id="custom-dates-section">
+        <label style="display:block;margin-bottom:10px">Custom Due Dates *</label>
+        <div id="custom-dates-list"></div>
+        <button type="button" class="cd-add-btn" onclick="addCustomDate()">+ Add Date</button>
+        <div class="hint" style="display:block;margin-top:10px">Add each specific date this bill is due. You can add as many dates as needed.</div>
+      </div>
+      <div class="fg"><label>Amount ($)</label><input id="f-amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="fg">
+        <label>Auto-Pay?</label>
+        <select id="f-autopay"><option value="No">No</option><option value="Yes">Yes</option></select>
+      </div>
+      <div class="fg full"><label>Usual Payment Method</label><input id="f-method" placeholder="e.g. Bank of America Mastercard" list="method-suggestions">
+        <datalist id="method-suggestions"><option value="Credit Card"><option value="Debit Card"><option value="Bank Transfer"><option value="Check"><option value="Cash"><option value="Auto-Pay"></datalist>
+      </div>
+      <div class="fg"><label>Account / Ref #</label><input id="f-account" placeholder="Optional"></div>
+      <div class="fg full"><label>Notes / Reminders</label><textarea id="f-notes" placeholder="e.g. Call if over $100, grace period until 5th…"></textarea></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeM('m-bill')">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveBill()">Save Bill</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAY MODAL ═══ -->
+<div class="overlay" id="m-pay">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">Mark as Paid</div>
+    <div class="pay-info" id="pay-info"></div>
+    <div class="fgrid">
+      <div class="fg full"><label>Date Paid *</label><input type="date" id="p-date"></div>
+      <div class="fg full"><label>Amount Paid ($)</label><input type="number" id="p-amount" step="0.01" placeholder="Leave blank for bill default"></div>
+      <div class="fg full">
+        <label>Paid With (method / card)</label>
+        <input id="p-method" placeholder="e.g. Bank of America Mastercard" list="pay-method-suggestions">
+        <datalist id="pay-method-suggestions"><option value="Credit Card"><option value="Debit Card"><option value="Bank Transfer"><option value="Check"><option value="Cash"><option value="Auto-Pay"></datalist>
+        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;width:max-content" onclick="savePaidWithOption()">+ Save this as an option</button>
+      </div>
+      <div class="fg full"><label>Paid By (person)</label><input id="p-paid-by" placeholder="e.g. Tom, Sarah, Joint…"></div>
+      <div class="fg full"><label>Confirmation #</label><input id="p-confirm" placeholder="Optional"></div>
+      <div class="fg full"><label>Notes</label><input id="p-notes" placeholder="Optional"></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeM('m-pay')">Cancel</button>
+      <button class="btn btn-pay" id="confirm-pay-btn" onclick="confirmPay()">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BILL DETAIL MODAL ═══ -->
+<div class="overlay" id="m-detail">
+  <div class="modal detail-modal">
+    <div class="detail-header" id="detail-header"></div>
+    <div class="detail-grid">
+      <div>
+        <div class="detail-section-title">📅 Upcoming Due Dates</div>
+        <div id="detail-upcoming"></div>
+      </div>
+      <div>
+        <div class="detail-section-title">💳 Payment History</div>
+        <div id="detail-history"></div>
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeM('m-detail')">Close</button>
+      <button class="btn btn-primary" id="detail-edit-btn">Edit Bill</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
