@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useApi } from '~/composables/useApi'
 
 type BillLike = {
@@ -24,15 +24,30 @@ const emit = defineEmits<{
 
 const api = useApi()
 const saving = ref(false)
+const savingMethod = ref(false)
 
 const paid_date = ref('')
 const amount = ref('')
 const method = ref('')
+const methodSearch = ref('')
+const methodPickerOpen = ref(false)
+const methodPickerEl = ref<HTMLElement | null>(null)
+const paymentMethods = ref<string[]>([])
 const paid_by = ref('')
 const confirm_num = ref('')
 const notes = ref('')
 
 const title = computed(() => (props.bill?.name ? `Record Payment — ${props.bill.name}` : 'Record Payment'))
+const filteredPaymentMethods = computed(() => {
+  const q = methodSearch.value.trim().toLowerCase()
+  if (!q) return paymentMethods.value
+  return paymentMethods.value.filter((m) => String(m || '').toLowerCase().includes(q))
+})
+const canAddMethod = computed(() => {
+  const q = methodSearch.value.trim()
+  if (!q) return false
+  return !paymentMethods.value.some((m) => m.toLowerCase() === q.toLowerCase())
+})
 
 function isoToday() {
   const t = new Date(new Date().toDateString())
@@ -44,16 +59,55 @@ function isoToday() {
 
 watch(
   () => props.open,
-  (isOpen) => {
+  async (isOpen) => {
     if (!isOpen) return
     paid_date.value = isoToday()
     amount.value = props.bill?.amount != null ? String(props.bill.amount) : ''
     method.value = props.bill?.method ? String(props.bill.method) : ''
+    methodSearch.value = method.value
+    methodPickerOpen.value = false
     paid_by.value = ''
     confirm_num.value = ''
     notes.value = ''
+    await loadPaymentMethods()
   }
 )
+
+async function loadPaymentMethods() {
+  try {
+    paymentMethods.value = await api.get<string[]>('/api/payment-methods')
+  } catch {
+    paymentMethods.value = []
+  }
+}
+
+function selectMethod(name: string) {
+  method.value = name
+  methodSearch.value = name
+  methodPickerOpen.value = false
+}
+
+async function addMethodFromSearch() {
+  const name = methodSearch.value.trim()
+  if (!name || savingMethod.value) return
+  savingMethod.value = true
+  try {
+    await api.post('/api/payment-methods', { name })
+    await loadPaymentMethods()
+    selectMethod(name)
+  } finally {
+    savingMethod.value = false
+  }
+}
+
+function onDocClick(e: MouseEvent) {
+  if (!methodPickerOpen.value) return
+  const el = methodPickerEl.value
+  if (!el) return
+  const t = e.target as Node | null
+  if (t && el.contains(t)) return
+  methodPickerOpen.value = false
+}
 
 async function save() {
   if (!props.bill?.id) return
@@ -76,6 +130,13 @@ async function save() {
     saving.value = false
   }
 }
+
+onMounted(() => {
+  document.addEventListener('click', onDocClick, true)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick, true)
+})
 </script>
 
 <template>
@@ -105,7 +166,60 @@ async function save() {
         </div>
         <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Paid With (method / card)</label>
-          <input v-model="method" placeholder="e.g. Mastercard" />
+          <div ref="methodPickerEl" class="relative">
+            <button
+              type="button"
+              class="inline-flex w-full items-center justify-between gap-[10px] rounded-[10px] border border-[color:var(--border)] bg-[color:var(--paper)] px-[11px] py-2 text-left text-[1.3rem] text-[color:var(--ink)] transition-colors hover:border-[color:var(--accent)]"
+              @click="methodPickerOpen = !methodPickerOpen"
+            >
+              <span class="truncate">{{ method || 'Select or search payment method' }}</span>
+              <span class="text-[1.1rem] text-[color:var(--ink-light)]">▾</span>
+            </button>
+            <div
+              v-if="methodPickerOpen"
+              class="absolute left-0 top-[calc(100%+6px)] z-50 w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--cream)] p-[10px] shadow-[0_8px_30px_var(--shadow)]"
+              @click.stop
+            >
+              <div class="mb-2 flex items-center gap-2">
+                <input
+                  v-model="methodSearch"
+                  class="flex-1 px-[10px] py-2 text-[1.3rem]"
+                  placeholder="Search methods..."
+                  @focus="methodPickerOpen = true"
+                  @keydown.enter.prevent="canAddMethod ? addMethodFromSearch() : null"
+                />
+                <button
+                  v-if="method"
+                  type="button"
+                  class="rounded-lg border border-[color:var(--border)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]"
+                  @click="selectMethod('')"
+                >Clear</button>
+              </div>
+              <div class="max-h-[220px] space-y-1 overflow-auto pr-1">
+                <button
+                  v-for="m in filteredPaymentMethods"
+                  :key="m"
+                  type="button"
+                  class="flex w-full items-center justify-between rounded-lg border px-[8px] py-[7px] text-left text-[1.28rem] transition-colors"
+                  :class="method === m ? 'border-[color:var(--accent)] bg-[color:var(--accent-light)]' : 'border-transparent hover:border-[color:var(--border)] hover:bg-[color:var(--paper-dark)]'"
+                  @click="selectMethod(m)"
+                >
+                  <span class="truncate">{{ m }}</span>
+                  <span v-if="method === m" class="ml-2 shrink-0 text-[1.1rem] font-semibold text-[color:var(--accent-dark)]">Selected</span>
+                </button>
+                <button
+                  v-if="canAddMethod"
+                  type="button"
+                  class="w-full rounded-lg border border-dashed border-[color:var(--accent)] px-[10px] py-[7px] text-left text-[1.2rem] font-semibold text-[color:var(--accent)] transition-colors hover:bg-[color:var(--accent-light)] disabled:opacity-60"
+                  :disabled="savingMethod"
+                  @click="addMethodFromSearch()"
+                >
+                  + Add "{{ methodSearch.trim() }}"
+                </button>
+                <div v-if="!filteredPaymentMethods.length && !canAddMethod" class="py-1 text-center text-[1.2rem] italic text-[color:var(--ink-light)]">No matching methods</div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Paid By (person)</label>

@@ -38,6 +38,11 @@ const detailBillId = ref<number | null>(null)
 const editPaidDate = ref('')
 const editAmount = ref('')
 const editMethod = ref('')
+const editMethodSearch = ref('')
+const editMethodPickerOpen = ref(false)
+const editMethodPickerEl = ref<HTMLElement | null>(null)
+const savingMethod = ref(false)
+const paymentMethods = ref<string[]>([])
 const editPaidBy = ref('')
 const editConfirmNum = ref('')
 const editNotes = ref('')
@@ -55,6 +60,16 @@ const selectedBillsLabel = computed(() => {
   const names = selectedBillIds.value.map((id) => byId.get(id)).filter(Boolean) as string[]
   if (names.length <= 2) return names.join(', ')
   return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+})
+const filteredPaymentMethods = computed(() => {
+  const q = editMethodSearch.value.trim().toLowerCase()
+  if (!q) return paymentMethods.value
+  return paymentMethods.value.filter((m) => String(m || '').toLowerCase().includes(q))
+})
+const canAddEditMethod = computed(() => {
+  const q = editMethodSearch.value.trim()
+  if (!q) return false
+  return !paymentMethods.value.some((m) => m.toLowerCase() === q.toLowerCase())
 })
 
 const totalExpected = computed(() =>
@@ -89,6 +104,14 @@ async function load() {
   }
 }
 
+async function loadPaymentMethods() {
+  try {
+    paymentMethods.value = await api.get<string[]>('/api/payment-methods')
+  } catch {
+    paymentMethods.value = []
+  }
+}
+
 function toggleBill(id: number) {
   const idx = selectedBillIds.value.indexOf(id)
   if (idx >= 0) selectedBillIds.value.splice(idx, 1)
@@ -113,12 +136,15 @@ function closeDetail() {
 }
 
 function onDocClick(e: MouseEvent) {
-  if (!billPickerOpen.value) return
-  const el = billPickerEl.value
-  if (!el) return
   const t = e.target as Node | null
-  if (t && el.contains(t)) return
-  billPickerOpen.value = false
+  if (billPickerOpen.value) {
+    const billEl = billPickerEl.value
+    if (!billEl || !(t && billEl.contains(t))) billPickerOpen.value = false
+  }
+  if (editMethodPickerOpen.value) {
+    const methodEl = editMethodPickerEl.value
+    if (!methodEl || !(t && methodEl.contains(t))) editMethodPickerOpen.value = false
+  }
 }
 
 function openEdit(p: Payment) {
@@ -126,6 +152,8 @@ function openEdit(p: Payment) {
   editPaidDate.value = p.paid_date || ''
   editAmount.value = p.amount == null ? '' : String(p.amount)
   editMethod.value = p.method || ''
+  editMethodSearch.value = editMethod.value
+  editMethodPickerOpen.value = false
   editPaidBy.value = p.paid_by || ''
   editConfirmNum.value = p.confirm_num || ''
   editNotes.value = p.notes || ''
@@ -135,6 +163,26 @@ function openEdit(p: Payment) {
 function closeEdit() {
   editOpen.value = false
   editing.value = null
+  editMethodPickerOpen.value = false
+}
+
+function selectEditMethod(name: string) {
+  editMethod.value = name
+  editMethodSearch.value = name
+  editMethodPickerOpen.value = false
+}
+
+async function addEditMethodFromSearch() {
+  const name = editMethodSearch.value.trim()
+  if (!name || savingMethod.value) return
+  savingMethod.value = true
+  try {
+    await api.post('/api/payment-methods', { name })
+    await loadPaymentMethods()
+    selectEditMethod(name)
+  } finally {
+    savingMethod.value = false
+  }
 }
 
 async function saveEdit() {
@@ -183,6 +231,7 @@ onMounted(() => {
   filterFrom.value = iso(from)
   filterTo.value = iso(t)
   document.addEventListener('click', onDocClick, true)
+  loadPaymentMethods()
   load()
 })
 
@@ -359,7 +408,60 @@ onUnmounted(() => {
         </div>
         <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Paid With (method / card)</label>
-          <input v-model="editMethod" placeholder="e.g. Mastercard" />
+          <div ref="editMethodPickerEl" class="relative">
+            <button
+              type="button"
+              class="inline-flex w-full items-center justify-between gap-[10px] rounded-[10px] border border-[color:var(--border)] bg-[color:var(--paper)] px-[11px] py-2 text-left text-[1.3rem] text-[color:var(--ink)] transition-colors hover:border-[color:var(--accent)]"
+              @click="editMethodPickerOpen = !editMethodPickerOpen"
+            >
+              <span class="truncate">{{ editMethod || 'Select or search payment method' }}</span>
+              <span class="text-[1.1rem] text-[color:var(--ink-light)]">▾</span>
+            </button>
+            <div
+              v-if="editMethodPickerOpen"
+              class="absolute left-0 top-[calc(100%+6px)] z-50 w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--cream)] p-[10px] shadow-[0_8px_30px_var(--shadow)]"
+              @click.stop
+            >
+              <div class="mb-2 flex items-center gap-2">
+                <input
+                  v-model="editMethodSearch"
+                  class="flex-1 px-[10px] py-2 text-[1.3rem]"
+                  placeholder="Search methods..."
+                  @focus="editMethodPickerOpen = true"
+                  @keydown.enter.prevent="canAddEditMethod ? addEditMethodFromSearch() : null"
+                />
+                <button
+                  v-if="editMethod"
+                  type="button"
+                  class="rounded-lg border border-[color:var(--border)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]"
+                  @click="selectEditMethod('')"
+                >Clear</button>
+              </div>
+              <div class="max-h-[220px] space-y-1 overflow-auto pr-1">
+                <button
+                  v-for="m in filteredPaymentMethods"
+                  :key="m"
+                  type="button"
+                  class="flex w-full items-center justify-between rounded-lg border px-[8px] py-[7px] text-left text-[1.28rem] transition-colors"
+                  :class="editMethod === m ? 'border-[color:var(--accent)] bg-[color:var(--accent-light)]' : 'border-transparent hover:border-[color:var(--border)] hover:bg-[color:var(--paper-dark)]'"
+                  @click="selectEditMethod(m)"
+                >
+                  <span class="truncate">{{ m }}</span>
+                  <span v-if="editMethod === m" class="ml-2 shrink-0 text-[1.1rem] font-semibold text-[color:var(--accent-dark)]">Selected</span>
+                </button>
+                <button
+                  v-if="canAddEditMethod"
+                  type="button"
+                  class="w-full rounded-lg border border-dashed border-[color:var(--accent)] px-[10px] py-[7px] text-left text-[1.2rem] font-semibold text-[color:var(--accent)] transition-colors hover:bg-[color:var(--accent-light)] disabled:opacity-60"
+                  :disabled="savingMethod"
+                  @click="addEditMethodFromSearch()"
+                >
+                  + Add "{{ editMethodSearch.trim() }}"
+                </button>
+                <div v-if="!filteredPaymentMethods.length && !canAddEditMethod" class="py-1 text-center text-[1.2rem] italic text-[color:var(--ink-light)]">No matching methods</div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Paid By (person)</label>
