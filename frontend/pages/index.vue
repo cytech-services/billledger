@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
+import { useConfirm } from '~/composables/useConfirm'
 
 type Bill = {
   id: number
@@ -29,6 +30,7 @@ type Payment = {
 }
 
 const api = useApi()
+const { confirm } = useConfirm()
 const bills = ref<Bill[]>([])
 const payments = ref<Payment[]>([])
 const loading = ref(true)
@@ -248,7 +250,13 @@ function closeDetail() {
 }
 
 async function undoLatestPayment(billId: number) {
-  const ok = confirm('Remove the most recent payment for this bill?')
+  const ok = await confirm({
+    title: 'Remove payment?',
+    message: 'Remove the most recent payment for this bill?',
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
   if (!ok) return
   const pays = await api.get<Payment[]>(`/api/payments?bill_id=${billId}`)
   if (!pays.length) return

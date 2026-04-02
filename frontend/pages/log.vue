@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
+import BillDetailModal from '~/components/BillDetailModal.vue'
+import { useConfirm } from '~/composables/useConfirm'
 
 type Bill = { id: number; name: string; amount?: number | null }
 type Payment = {
@@ -16,6 +18,7 @@ type Payment = {
 }
 
 const api = useApi()
+const { confirm } = useConfirm()
 const bills = ref<Bill[]>([])
 const payments = ref<Payment[]>([])
 const loading = ref(false)
@@ -29,6 +32,8 @@ const filterTo = ref<string>('')
 const editing = ref<Payment | null>(null)
 const editOpen = ref(false)
 const saving = ref(false)
+const detailOpen = ref(false)
+const detailBillId = ref<number | null>(null)
 
 const editPaidDate = ref('')
 const editAmount = ref('')
@@ -97,6 +102,16 @@ function clearBills() {
   load()
 }
 
+function openDetail(billId: number) {
+  detailBillId.value = billId
+  detailOpen.value = true
+}
+
+function closeDetail() {
+  detailOpen.value = false
+  detailBillId.value = null
+}
+
 function onDocClick(e: MouseEvent) {
   if (!billPickerOpen.value) return
   const el = billPickerEl.value
@@ -145,7 +160,13 @@ async function saveEdit() {
 }
 
 async function removePayment(id: number) {
-  const ok = confirm('Remove this payment record?')
+  const ok = await confirm({
+    title: 'Remove payment?',
+    message: 'Remove this payment record?',
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
   if (!ok) return
   try {
     await api.del(`/api/payments/${id}`)
@@ -228,7 +249,7 @@ onUnmounted(() => {
       <div v-for="p in payments" :key="p.id" class="lrow">
         <div class="l-main">
           <div class="l-top">
-            <div class="l-name">{{ p.bill_name || 'Unknown' }}</div>
+            <div class="l-name l-name-link" @click="openDetail(p.bill_id)">{{ p.bill_name || 'Unknown' }}</div>
             <div class="l-amt">
               {{ fmtMoney(p.amount) }}<span class="l-due-amt"> ({{ fmtMoney(billAmountById.get(p.bill_id) ?? null) }})</span>
             </div>
@@ -277,6 +298,8 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+
+  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load()" />
 
   <div class="overlay" :class="{ open: editOpen }" @click.self="closeEdit()">
     <div class="modal">

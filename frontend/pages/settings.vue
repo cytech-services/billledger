@@ -2,8 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import { useRuntimeConfig } from '#imports'
+import { useConfirm } from '~/composables/useConfirm'
 
 const api = useApi()
+const { confirm } = useConfirm()
 const tab = ref<'methods' | 'backups'>('methods')
 
 const paymentMethods = ref<string[]>([])
@@ -42,7 +44,13 @@ async function addMethod() {
 }
 
 async function removeMethod(name: string) {
-  const ok = confirm(`Remove "${name}" from saved methods?`)
+  const ok = await confirm({
+    title: 'Remove payment method?',
+    message: `Remove "${name}" from saved methods?`,
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
   if (!ok) return
   settingsErr.value = null
   try {
@@ -102,7 +110,13 @@ function downloadBackup(filename: string) {
 }
 
 async function restoreBackup(filename: string) {
-  const ok = confirm(`Restore backup "${filename}"?\n\nThis will replace the current database and cannot be undone except by another backup.`)
+  const ok = await confirm({
+    title: 'Restore backup?',
+    message: `Restore backup "${filename}"?\n\nThis will replace the current database and cannot be undone except by another backup.`,
+    confirmText: 'Restore',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
   if (!ok) return
   settingsErr.value = null
   try {

@@ -1,4 +1,7 @@
 {
   // Nuxt 3 TypeScript setup
-  "extends": "./.nuxt/tsconfig.json"
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  }
 }

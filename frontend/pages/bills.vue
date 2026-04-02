@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import BillModal from '~/components/BillModal.vue'
+import { useConfirm } from '~/composables/useConfirm'
 
 type Bill = {
   id: number
@@ -18,6 +19,7 @@ type Bill = {
 }
 
 const api = useApi()
+const { confirm } = useConfirm()
 const bills = ref<Bill[]>([])
 const loading = ref(false)
 const err = ref<string | null>(null)
@@ -77,7 +79,13 @@ function closeModal() {
 }
 
 async function deleteBill(id: number) {
-  const ok = confirm('Delete this bill and all its payment history?')
+  const ok = await confirm({
+    title: 'Delete bill?',
+    message: 'Delete this bill and all its payment history?',
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
   if (!ok) return
   try {
     await api.del(`/api/bills/${id}`)

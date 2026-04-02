@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useApi } from '~/composables/useApi'
+import { useConfirm } from '~/composables/useConfirm'
 
 type Bill = {
   id?: number
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const api = useApi()
+const { confirm } = useConfirm()
 const saving = ref(false)
 
 const name = ref('')
@@ -89,8 +91,15 @@ watch(
 function addCustomDate() {
   customDates.value.push('')
 }
-function removeCustomDate(i: number) {
-  if (!confirm('Remove this custom date?')) return
+async function removeCustomDate(i: number) {
+  const ok = await confirm({
+    title: 'Remove custom date?',
+    message: 'Remove this custom date?',
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
+  if (!ok) return
   customDates.value.splice(i, 1)
 }
 
