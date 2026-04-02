@@ -232,7 +232,7 @@ onMounted(load)
               </div>
               <div>
                 <button
-                  v-if="o.status === 'overdue' || o.status === 'upcoming'"
+                  v-if="o.status === 'overdue' || o.status === 'due-soon' || o.status === 'upcoming'"
                   class="btn btn-pay btn-sm"
                   @click="openPay(o.bill_id, o.occurrence_id)"
                 >
