@@ -157,9 +157,9 @@ async function afterEditSaved() {
             <div v-if="!details.payments?.length" class="detail-empty">No payments recorded yet.</div>
             <div v-else>
               <div v-for="p in details.payments" :key="p.id" class="detail-pay-row">
-                <div class="detail-pay-date">
-                  {{ fmtDate(p.paid_date) }}
-                  <span class="detail-pay-amt">{{ fmtMoney(p.amount) }}</span>
+                <div class="mb-[2px] flex items-baseline justify-between gap-3">
+                  <span class="font-semibold text-[color:var(--ink)]">{{ fmtDate(p.paid_date) }}</span>
+                  <span class="whitespace-nowrap font-['DM_Serif_Display'] text-[1.5rem] text-[color:var(--green)]">{{ fmtMoney(p.amount) }}</span>
                 </div>
                 <div class="detail-pay-meta">
                   <span v-if="p.method">{{ p.method }}</span>

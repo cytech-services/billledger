@@ -3,8 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BACKUP_RETENTION_DAYS = exports.BACKUP_DIR = exports.DB_PATH = exports.PORT = exports.app = void 0;
+exports.OCCURRENCE_FUTURE_YEARS = exports.BACKUP_RETENTION_DAYS = exports.BACKUP_DIR = exports.DB_PATH = exports.PORT = exports.app = void 0;
 exports.connectDb = connectDb;
+exports.createBackup = createBackup;
+exports.pruneOldBackups = pruneOldBackups;
+exports.initDb = initDb;
+exports.generateFutureOccurrencesForAllBills = generateFutureOccurrencesForAllBills;
+exports.runDailyMaintenance = runDailyMaintenance;
 exports.startApp = startApp;
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
@@ -18,6 +23,7 @@ exports.PORT = Number(process.env.PORT || 3001);
 exports.DB_PATH = process.env.DB_PATH || path_1.default.join(__dirname, '..', '..', 'bills.db');
 exports.BACKUP_DIR = process.env.BACKUP_DIR || path_1.default.join(path_1.default.dirname(exports.DB_PATH), 'backups');
 exports.BACKUP_RETENTION_DAYS = Number(process.env.BACKUP_RETENTION_DAYS || 30);
+exports.OCCURRENCE_FUTURE_YEARS = Number(process.env.OCCURRENCE_FUTURE_YEARS || 2);
 let db = null;
 function connectDb() {
     db = new better_sqlite3_1.default(exports.DB_PATH);
@@ -150,6 +156,149 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_bill_custom_dates_bill_id ON bill_custom_dates(bill_id);
     CREATE INDEX IF NOT EXISTS idx_bill_custom_dates_due_date ON bill_custom_dates(due_date);
   `);
+    ensureDb().exec(`
+    CREATE TABLE IF NOT EXISTS bill_occurrences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bill_id INTEGER NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+      due_date TEXT NOT NULL,
+      expected_amount REAL,
+      status TEXT NOT NULL DEFAULT 'scheduled',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_bill_occurrences_bill_due ON bill_occurrences(bill_id, due_date);
+    CREATE INDEX IF NOT EXISTS idx_bill_occurrences_due_date ON bill_occurrences(due_date);
+    CREATE INDEX IF NOT EXISTS idx_bill_occurrences_status ON bill_occurrences(status);
+  `);
+    const paymentCols = ensureDb().prepare(`PRAGMA table_info(payments)`).all();
+    if (!paymentCols.some((c) => c.name === 'occurrence_id')) {
+        ensureDb().exec(`ALTER TABLE payments ADD COLUMN occurrence_id INTEGER REFERENCES bill_occurrences(id) ON DELETE SET NULL`);
+    }
+    ensureDb().exec(`CREATE INDEX IF NOT EXISTS idx_payments_occurrence_id ON payments(occurrence_id)`);
+}
+function upsertOccurrencesForBill(bill, startDate, endDate) {
+    const occDates = calcOccurrences(bill, startDate, endDate);
+    const insert = ensureDb().prepare(`INSERT OR IGNORE INTO bill_occurrences (bill_id, due_date, expected_amount, status)
+     VALUES (?, ?, ?, 'scheduled')`);
+    const update = ensureDb().prepare(`UPDATE bill_occurrences
+     SET expected_amount = COALESCE(?, expected_amount)
+     WHERE bill_id = ? AND due_date = ?`);
+    const tx = ensureDb().transaction(() => {
+        for (const dueDate of occDates) {
+            insert.run(bill.id, dueDate, bill.amount ?? null);
+            update.run(bill.amount ?? null, bill.id, dueDate);
+        }
+    });
+    tx();
+}
+function regenerateFutureUnpaidOccurrencesForBill(bill, fromDate, endDate) {
+    const from = formatDate(fromDate);
+    // Keep any occurrence that already has at least one payment linked to it.
+    ensureDb()
+        .prepare(`
+      DELETE FROM bill_occurrences
+      WHERE bill_id = ?
+        AND due_date >= ?
+        AND id NOT IN (
+          SELECT DISTINCT occurrence_id
+          FROM payments
+          WHERE occurrence_id IS NOT NULL
+        )
+    `)
+        .run(bill.id, from);
+    upsertOccurrencesForBill(bill, fromDate, endDate);
+}
+function nearestOccurrenceIdForPayment(billId, paidDate) {
+    const rows = ensureDb()
+        .prepare(`SELECT id, due_date
+       FROM bill_occurrences
+       WHERE bill_id = ?
+       ORDER BY ABS(julianday(due_date) - julianday(?)) ASC, due_date ASC
+       LIMIT 1`)
+        .all(billId, paidDate);
+    return rows[0]?.id ?? null;
+}
+function ensureOccurrencesForBillAroundDate(bill, paidDate) {
+    const center = isoDate(paidDate);
+    const start = new Date(center);
+    const end = new Date(center);
+    start.setFullYear(start.getFullYear() - 2);
+    end.setFullYear(end.getFullYear() + 2);
+    upsertOccurrencesForBill(bill, start, end);
+}
+function backfillOccurrencesAndPaymentLinks() {
+    const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all();
+    const now = startOfDay();
+    const defaultStart = new Date(now);
+    const defaultEnd = new Date(now);
+    defaultStart.setFullYear(defaultStart.getFullYear() - 2);
+    defaultEnd.setFullYear(defaultEnd.getFullYear() + 2);
+    for (const bill of bills) {
+        const paidRange = ensureDb()
+            .prepare('SELECT MIN(paid_date) AS min_paid, MAX(paid_date) AS max_paid FROM payments WHERE bill_id = ?')
+            .get(bill.id);
+        const start = new Date(defaultStart);
+        const end = new Date(defaultEnd);
+        if (paidRange?.min_paid) {
+            const minPaid = isoDate(String(paidRange.min_paid));
+            minPaid.setFullYear(minPaid.getFullYear() - 1);
+            if (minPaid < start)
+                start.setTime(minPaid.getTime());
+        }
+        if (paidRange?.max_paid) {
+            const maxPaid = isoDate(String(paidRange.max_paid));
+            maxPaid.setFullYear(maxPaid.getFullYear() + 1);
+            if (maxPaid > end)
+                end.setTime(maxPaid.getTime());
+        }
+        upsertOccurrencesForBill(bill, start, end);
+    }
+    const paymentsToLink = ensureDb()
+        .prepare('SELECT id, bill_id, paid_date FROM payments WHERE occurrence_id IS NULL')
+        .all();
+    const update = ensureDb().prepare('UPDATE payments SET occurrence_id = ? WHERE id = ?');
+    const billById = new Map(bills.map((b) => [Number(b.id), b]));
+    const tx = ensureDb().transaction(() => {
+        for (const p of paymentsToLink) {
+            let occId = nearestOccurrenceIdForPayment(p.bill_id, p.paid_date);
+            if (!occId) {
+                const bill = billById.get(Number(p.bill_id));
+                if (bill) {
+                    ensureOccurrencesForBillAroundDate(bill, p.paid_date);
+                    occId = nearestOccurrenceIdForPayment(p.bill_id, p.paid_date);
+                }
+            }
+            if (occId)
+                update.run(occId, p.id);
+        }
+    });
+    tx();
+}
+function generateFutureOccurrencesForAllBills() {
+    const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all();
+    const start = startOfDay();
+    const end = new Date(start);
+    end.setFullYear(end.getFullYear() + exports.OCCURRENCE_FUTURE_YEARS);
+    for (const bill of bills) {
+        upsertOccurrencesForBill(bill, start, end);
+    }
+}
+function startDailyOccurrenceScheduler() {
+    const intervalMs = 24 * 60 * 60 * 1000;
+    setInterval(() => {
+        try {
+            generateFutureOccurrencesForAllBills();
+            console.log('Daily occurrence generation complete.');
+        }
+        catch (err) {
+            const e = err;
+            console.error('Daily occurrence generation failed:', e.message);
+        }
+    }, intervalMs);
+}
+async function runDailyMaintenance() {
+    await createBackup('scheduled');
+    await pruneOldBackups();
+    generateFutureOccurrencesForAllBills();
 }
 function normalizeMethodName(name) {
     return String(name || '').trim();
@@ -539,7 +688,15 @@ exports.app.get('/api/bills/:id/details', (req, res) => {
     const today = startOfDay();
     const end = new Date(today);
     end.setFullYear(end.getFullYear() + 2);
-    const upcoming = calcOccurrences(bill, today, end).slice(0, 20);
+    upsertOccurrencesForBill(bill, today, end);
+    const upcoming = ensureDb()
+        .prepare(`SELECT due_date
+       FROM bill_occurrences
+       WHERE bill_id = ? AND due_date >= ? AND due_date <= ?
+       ORDER BY due_date
+       LIMIT 20`)
+        .all(billId, formatDate(today), formatDate(end))
+        .map((r) => r.due_date);
     res.json({
         bill,
         upcoming,
@@ -573,6 +730,14 @@ exports.app.post('/api/bills', (req, res) => {
                 insertCustomDate.run(billId, dt);
         }
         savePaymentMethod(d.method);
+        const insertedBill = getBillById(billId);
+        if (insertedBill) {
+            const start = startOfDay();
+            const end = new Date(start);
+            start.setFullYear(start.getFullYear() - 1);
+            end.setFullYear(end.getFullYear() + 2);
+            upsertOccurrencesForBill(insertedBill, start, end);
+        }
         return billId;
     });
     const billId = tx();
@@ -613,6 +778,19 @@ exports.app.put('/api/bills/:id', (req, res) => {
                 insertCustomDate.run(billId, dt);
         }
         savePaymentMethod(d.method);
+        const updatedBill = getBillById(billId);
+        if (updatedBill) {
+            const start = startOfDay();
+            const end = new Date(start);
+            end.setFullYear(end.getFullYear() + 2);
+            const frequencyChanged = String(existing.frequency || '') !== String(d.frequency || '');
+            if (frequencyChanged) {
+                regenerateFutureUnpaidOccurrencesForBill(updatedBill, start, end);
+            }
+            else {
+                upsertOccurrencesForBill(updatedBill, start, end);
+            }
+        }
     });
     tx();
     res.json(getBillById(billId));
@@ -624,17 +802,47 @@ exports.app.delete('/api/bills/:id', (req, res) => {
 });
 // --- Payments ---
 exports.app.get('/api/payments', (req, res) => {
-    const billId = req.query.bill_id ? Number(req.query.bill_id) : null;
+    const billIdRaw = req.query.bill_id;
     const month = req.query.month ? String(req.query.month) : null;
-    let sql = 'SELECT p.*, b.name AS bill_name FROM payments p LEFT JOIN bills b ON b.id = p.bill_id WHERE 1=1';
+    const from = req.query.from ? String(req.query.from) : null;
+    const to = req.query.to ? String(req.query.to) : formatDate(startOfDay(new Date()));
+    let sql = 'SELECT p.*, b.name AS bill_name, o.due_date AS occurrence_due_date FROM payments p LEFT JOIN bills b ON b.id = p.bill_id LEFT JOIN bill_occurrences o ON o.id = p.occurrence_id WHERE 1=1';
     const args = [];
-    if (billId) {
-        sql += ' AND p.bill_id = ?';
-        args.push(billId);
+    if (billIdRaw != null && String(billIdRaw).trim()) {
+        const ids = String(billIdRaw)
+            .split(',')
+            .map((s) => Number(String(s).trim()))
+            .filter((n) => Number.isFinite(n) && n > 0);
+        if (ids.length === 1) {
+            sql += ' AND p.bill_id = ?';
+            args.push(ids[0]);
+        }
+        else if (ids.length > 1) {
+            sql += ` AND p.bill_id IN (${ids.map(() => '?').join(',')})`;
+            args.push(...ids);
+        }
     }
     if (month) {
         sql += " AND strftime('%Y-%m', p.paid_date) = ?";
         args.push(month);
+    }
+    if (from) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(from.trim());
+        if (!m) {
+            res.status(400).json({ error: 'Invalid from date. Expected YYYY-MM-DD.' });
+            return;
+        }
+        sql += ' AND p.paid_date >= ?';
+        args.push(from.trim());
+    }
+    if (to) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(to.trim());
+        if (!m) {
+            res.status(400).json({ error: 'Invalid to date. Expected YYYY-MM-DD.' });
+            return;
+        }
+        sql += ' AND p.paid_date <= ?';
+        args.push(to.trim());
     }
     sql += ' ORDER BY p.paid_date DESC';
     res.json(ensureDb().prepare(sql).all(...args));
@@ -657,9 +865,11 @@ exports.app.post('/api/payments', (req, res) => {
         return;
     }
     const tx = ensureDb().transaction(() => {
+        ensureOccurrencesForBillAroundDate(bill, d.paid_date);
+        const occurrenceId = nearestOccurrenceIdForPayment(Number(d.bill_id), d.paid_date);
         ensureDb()
-            .prepare(`INSERT INTO payments (bill_id, paid_date, amount, method, paid_by, confirm_num, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-            .run(d.bill_id, d.paid_date, d.amount || bill.amount, d.method || bill.method || '', d.paid_by || '', d.confirm_num || '', d.notes || '');
+            .prepare(`INSERT INTO payments (bill_id, occurrence_id, paid_date, amount, method, paid_by, confirm_num, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(d.bill_id, occurrenceId, d.paid_date, d.amount || bill.amount, d.method || bill.method || '', d.paid_by || '', d.confirm_num || '', d.notes || '');
         savePaymentMethod(d.method);
         if (bill.next_date) {
             let dt = isoDate(bill.next_date);
@@ -700,9 +910,15 @@ exports.app.put('/api/payments/:id', (req, res) => {
     const paidBy = d.paid_by == null ? existing.paid_by : d.paid_by;
     const confirmNum = d.confirm_num == null ? existing.confirm_num : d.confirm_num;
     const notes = d.notes == null ? existing.notes : d.notes;
+    const bill = getBillById(Number(existing.bill_id));
+    let occurrenceId = existing.occurrence_id ?? null;
+    if (d.paid_date && bill) {
+        ensureOccurrencesForBillAroundDate(bill, paidDate);
+        occurrenceId = nearestOccurrenceIdForPayment(Number(existing.bill_id), paidDate);
+    }
     ensureDb()
-        .prepare(`UPDATE payments SET paid_date = ?, amount = ?, method = ?, paid_by = ?, confirm_num = ?, notes = ? WHERE id = ?`)
-        .run(paidDate, amount, method, paidBy, confirmNum, notes, paymentId);
+        .prepare(`UPDATE payments SET occurrence_id = ?, paid_date = ?, amount = ?, method = ?, paid_by = ?, confirm_num = ?, notes = ? WHERE id = ?`)
+        .run(occurrenceId, paidDate, amount, method, paidBy, confirmNum, notes, paymentId);
     savePaymentMethod(method);
     res.json({ ok: true });
 });
@@ -710,69 +926,124 @@ exports.app.delete('/api/payments/:id', (req, res) => {
     ensureDb().prepare('DELETE FROM payments WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
 });
+// --- Dashboard occurrences ---
+exports.app.get('/api/dashboard-occurrences', (req, res) => {
+    const todayDt = startOfDay();
+    const monthStart = new Date(todayDt.getFullYear(), todayDt.getMonth(), 1);
+    const monthEnd = new Date(todayDt.getFullYear(), todayDt.getMonth() + 1, 0);
+    const minDue = new Date(todayDt);
+    minDue.setDate(minDue.getDate() - 30);
+    const fromRaw = req.query.from ? String(req.query.from).trim() : formatDate(minDue);
+    const toRaw = req.query.to ? String(req.query.to).trim() : formatDate(monthEnd);
+    const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromRaw);
+    const m2 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toRaw);
+    if (!m1 || !m2) {
+        res.status(400).json({ error: 'Invalid from/to date. Expected YYYY-MM-DD.' });
+        return;
+    }
+    const from = fromRaw;
+    const to = toRaw;
+    const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all();
+    const startObj = isoDate(from);
+    const endObj = isoDate(to);
+    for (const bill of bills) {
+        upsertOccurrencesForBill(bill, startObj, endObj);
+    }
+    const rows = ensureDb()
+        .prepare(`
+      SELECT
+        o.id AS occurrence_id,
+        o.bill_id AS bill_id,
+        o.due_date AS due_date,
+        o.expected_amount AS expected_amount,
+        b.name AS bill_name,
+        b.company AS company,
+        b.frequency AS frequency,
+        b.autopay AS autopay,
+        p.id AS payment_id,
+        p.paid_date AS paid_date,
+        p.amount AS paid_amount
+      FROM bill_occurrences o
+      JOIN bills b ON b.id = o.bill_id
+      LEFT JOIN payments p
+        ON p.id = (
+          SELECT p2.id
+          FROM payments p2
+          WHERE p2.occurrence_id = o.id
+          ORDER BY p2.paid_date DESC, p2.id DESC
+          LIMIT 1
+        )
+      WHERE o.due_date BETWEEN ? AND ?
+      ORDER BY o.due_date ASC, b.name ASC
+    `)
+        .all(from, to);
+    res.json({
+        today: formatDate(todayDt),
+        month_start: formatDate(monthStart),
+        month_end: formatDate(monthEnd),
+        overdue_window_start: formatDate(minDue),
+        occurrences: rows
+    });
+});
 // --- Year view ---
 exports.app.get('/api/year-view', (req, res) => {
     const year = Number(req.query.year || new Date().getFullYear());
     const today = startOfDay();
     const yearStart = new Date(year, 0, 1);
     const end = new Date(year, 11, 31);
-    const buffer = new Date(year, 0, 1);
-    buffer.setDate(buffer.getDate() - 45);
-    const allPayments = ensureDb()
-        .prepare('SELECT * FROM payments WHERE paid_date BETWEEN ? AND ?')
-        .all(formatDate(buffer), formatDate(end));
+    const startStr = formatDate(yearStart);
+    const endStr = formatDate(end);
     const yearPaidTotalRow = ensureDb()
         .prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE paid_date BETWEEN ? AND ?')
-        .get(formatDate(yearStart), formatDate(end));
+        .get(startStr, endStr);
     const yearPaidTotal = Number(yearPaidTotalRow?.total || 0);
-    const payMap = new Map();
-    for (const p of allPayments) {
-        if (!payMap.has(p.bill_id))
-            payMap.set(p.bill_id, []);
-        payMap.get(p.bill_id).push(p);
-    }
     const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all();
+    const allPayments = ensureDb()
+        .prepare(`SELECT p.*, o.due_date AS occurrence_due_date
+       FROM payments p
+       LEFT JOIN bill_occurrences o ON o.id = p.occurrence_id
+       WHERE p.occurrence_id IS NOT NULL
+         AND o.due_date BETWEEN ? AND ?`)
+        .all(startStr, endStr);
+    const payByOccurrence = new Map();
+    for (const p of allPayments) {
+        const occId = Number(p.occurrence_id);
+        if (!Number.isFinite(occId) || occId <= 0)
+            continue;
+        if (!payByOccurrence.has(occId))
+            payByOccurrence.set(occId, []);
+        payByOccurrence.get(occId).push(p);
+    }
+    for (const arr of payByOccurrence.values()) {
+        arr.sort((a, b) => String(b.paid_date).localeCompare(String(a.paid_date)));
+    }
     const allOccurrences = [];
     for (const bill of bills) {
-        const occDates = calcOccurrences(bill, yearStart, end);
-        const billPays = (payMap.get(bill.id) || []).slice().sort((a, b) => String(a.paid_date).localeCompare(String(b.paid_date)));
-        const occMatches = occDates.map((d) => ({ dueDateStr: d, dueDateObj: isoDate(d) }));
-        const matched = {};
-        for (const payment of billPays) {
-            if (!occMatches.length)
-                break;
-            const paidDateObj = isoDate(payment.paid_date);
-            let bestIdx = 0;
-            let bestScore = Number.POSITIVE_INFINITY;
-            occMatches.forEach((occ, idx) => {
-                const score = paymentMatchScore(paidDateObj, occ.dueDateObj);
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestIdx = idx;
-                }
-            });
-            const best = occMatches.splice(bestIdx, 1)[0];
-            matched[best.dueDateStr] = payment;
-        }
-        for (const occStr of occDates) {
-            const occObj = isoDate(occStr);
+        const occRows = ensureDb()
+            .prepare(`SELECT id, due_date, expected_amount
+         FROM bill_occurrences
+         WHERE bill_id = ? AND due_date BETWEEN ? AND ?
+         ORDER BY due_date`)
+            .all(bill.id, startStr, endStr);
+        for (const occ of occRows) {
+            const occObj = isoDate(occ.due_date);
             let status = 'upcoming';
             if (occObj < today)
                 status = 'overdue';
-            if (matched[occStr])
+            const paymentEntry = (payByOccurrence.get(Number(occ.id)) || [])[0] || null;
+            if (paymentEntry)
                 status = 'paid';
             else {
                 const diffDays = Math.round((occObj.getTime() - today.getTime()) / 86400000);
                 if (diffDays >= 0 && diffDays <= 15)
                     status = 'due-soon';
             }
-            const paymentEntry = matched[occStr] || null;
             allOccurrences.push({
                 bill_id: bill.id,
                 bill_name: bill.name,
                 company: bill.company || '',
-                amount: bill.amount,
-                due_date: occStr,
+                amount: occ.expected_amount ?? bill.amount ?? null,
+                due_date: occ.due_date,
                 frequency: bill.frequency,
                 autopay: bill.autopay,
                 status,
@@ -821,7 +1092,8 @@ exports.app.get('/api/summary', (_req, res) => {
 function startApp() {
     connectDb();
     initDb();
+    backfillOccurrencesAndPaymentLinks();
+    generateFutureOccurrencesForAllBills();
     seedPaymentMethods();
     ensureBackupDir();
-    startDailyBackupScheduler();
 }

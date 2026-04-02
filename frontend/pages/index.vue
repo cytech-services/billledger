@@ -20,6 +20,8 @@ type Bill = {
 type Payment = {
   id: number
   bill_id: number
+  occurrence_id?: number | null
+  occurrence_due_date?: string | null
   bill_name?: string
   paid_date: string
   amount?: number | null
@@ -29,13 +31,35 @@ type Payment = {
   notes?: string | null
 }
 
+type DashboardOccurrence = {
+  occurrence_id: number
+  bill_id: number
+  due_date: string
+  expected_amount?: number | null
+  bill_name: string
+  company?: string | null
+  frequency: string
+  autopay?: 'Yes' | 'No'
+  payment_id?: number | null
+  paid_date?: string | null
+  paid_amount?: number | null
+}
+
+type DashboardResponse = {
+  today: string
+  month_start: string
+  month_end: string
+  overdue_window_start: string
+  occurrences: DashboardOccurrence[]
+}
+
 const api = useApi()
 const { confirm } = useConfirm()
 const bills = ref<Bill[]>([])
 const payments = ref<Payment[]>([])
+const occurrences = ref<DashboardOccurrence[]>([])
 const loading = ref(true)
 const err = ref<string | null>(null)
-const customNextDueByBillId = ref<Record<number, string | null>>({})
 
 const payModalOpen = ref(false)
 const payingBill = ref<Bill | null>(null)
@@ -58,141 +82,77 @@ function fmtIsoDate(d: Date) {
   return `${y}-${m}-${day}`
 }
 
-function calcNextDue(b: Bill): Date | null {
-  const t = today()
-  if (b.frequency === 'Monthly') {
-    const day = Number(b.due_day)
-    if (!day) return null
-    let d = new Date(t.getFullYear(), t.getMonth(), day)
-    if (d <= t) d = new Date(t.getFullYear(), t.getMonth() + 1, day)
-    return d
-  }
-  if (b.frequency === 'Custom') {
-    const next = customNextDueByBillId.value[b.id]
-    return next ? new Date(next + 'T00:00:00') : null
-  }
-  if (b.frequency === 'Estimated Tax (US/NY)') {
-    const y = t.getFullYear()
-    const cand = [new Date(y, 0, 15), new Date(y, 3, 15), new Date(y, 5, 15), new Date(y, 8, 15), new Date(y + 1, 0, 15)]
-    return cand.find((d) => d >= t) || null
-  }
-  if (b.next_date) return new Date(b.next_date + 'T00:00:00')
-  return null
-}
-
 function daysUntil(d: Date | null) {
   if (!d) return null
   return Math.round((d.getTime() - today().getTime()) / 86400000)
 }
 
-const lastPayByBillId = computed(() => {
-  const map = new Map<number, Payment>()
-  for (const p of payments.value) {
-    const cur = map.get(p.bill_id)
-    if (!cur || p.paid_date > cur.paid_date) map.set(p.bill_id, p)
-  }
-  return map
-})
-
 type Status = 'overdue' | 'due-soon' | 'upcoming' | 'paid'
-
-function getCycleStart(b: Bill, nd: Date) {
-  const d = new Date(nd)
-  if (b.frequency === 'Estimated Tax (US/NY)') {
-    const month = d.getMonth() + 1
-    const year = d.getFullYear()
-    if (month === 1) return new Date(year - 1, 8, 15)
-    if (month === 4) return new Date(year, 0, 15)
-    if (month === 6) return new Date(year, 3, 15)
-    if (month === 9) return new Date(year, 5, 15)
-  }
-  const m: Record<string, number> = { Monthly: 1, 'Bi-Monthly': 2, Quarterly: 3, 'Semi-Annual': 6, Annual: 12 }
-  if (m[b.frequency]) {
-    d.setMonth(d.getMonth() - m[b.frequency])
-    return d
-  }
-  if (b.frequency === 'Weekly') {
-    d.setDate(d.getDate() - 7)
-    return d
-  }
-  if (b.frequency === 'Bi-Weekly') {
-    d.setDate(d.getDate() - 14)
-    return d
-  }
-  return d
-}
-
-function getStatus(b: Bill): Status {
-  const nd = calcNextDue(b)
-  const days = daysUntil(nd)
-  const lastPay = lastPayByBillId.value.get(b.id)
-  if (lastPay && nd) {
-    const payDt = new Date(lastPay.paid_date + 'T00:00:00')
-    if (b.frequency === 'Custom') {
-      // For custom schedules, treat as paid when the latest payment maps to the next due date
-      // in the same calendar month (e.g., pay on 2026-04-02 for due 2026-04-30).
-      if (payDt.getFullYear() === nd.getFullYear() && payDt.getMonth() === nd.getMonth()) return 'paid'
-    }
-    const cycleStart = getCycleStart(b, nd)
-    if (payDt >= cycleStart) return 'paid'
-  }
-  if (days == null) return 'upcoming'
-  if (days < 0) return 'overdue'
-  if (days <= 15) return 'due-soon'
+function statusForOccurrence(o: DashboardOccurrence): Status {
+  if (o.paid_date) return 'paid'
+  const d = new Date(o.due_date + 'T00:00:00')
+  const diff = daysUntil(d)
+  if (diff == null) return 'upcoming'
+  if (diff < 0) return 'overdue'
+  if (diff <= 15) return 'due-soon'
   return 'upcoming'
 }
-
-function isDueInCurrentMonth(b: Bill) {
-  const t = today()
-  const nd = calcNextDue(b)
-  return !!nd && nd.getFullYear() === t.getFullYear() && nd.getMonth() === t.getMonth()
-}
-
-const monthBills = computed(() => bills.value.filter(isDueInCurrentMonth))
-
-const overdueBills = computed(() => {
-  const t = today()
-  const min = new Date(t)
-  min.setDate(min.getDate() - 30)
-  return bills.value.filter((b) => {
-    const nd = calcNextDue(b)
-    if (!nd) return false
-    if (nd < min) return false
-    if (nd >= t) return false
-    return getStatus(b) === 'overdue'
-  })
-})
-const soonBills = computed(() => monthBills.value.filter((b) => getStatus(b) === 'due-soon'))
-const upcomingBills = computed(() =>
-  monthBills.value
-    .filter((b) => getStatus(b) === 'upcoming')
-    .sort((a, b) => {
-      const ad = calcNextDue(a)?.getTime() ?? Number.POSITIVE_INFINITY
-      const bd = calcNextDue(b)?.getTime() ?? Number.POSITIVE_INFINITY
-      return ad - bd
-    })
-)
-const paidBills = computed(() => monthBills.value.filter((b) => getStatus(b) === 'paid'))
-const dueThisMonthBills = computed(() => {
-  return bills.value.filter((b) => {
-    if (getStatus(b) === 'paid') return false
-    return isDueInCurrentMonth(b)
-  })
-})
 
 const monthKey = computed(() => {
   const t = today()
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`
 })
+const monthOccurrences = computed(() => occurrences.value.filter((o) => String(o.due_date || '').startsWith(monthKey.value)))
+const billById = computed(() => {
+  const map = new Map<number, Bill>()
+  for (const b of bills.value) map.set(b.id, b)
+  return map
+})
+const overdueBills = computed(() => {
+  const t = today()
+  const min = new Date(t)
+  min.setDate(min.getDate() - 30)
+  return occurrences.value.filter((o) => {
+    if (o.paid_date) return false
+    const d = new Date(o.due_date + 'T00:00:00')
+    return d >= min && d < t
+  })
+})
+const soonBills = computed(() => monthOccurrences.value.filter((o) => statusForOccurrence(o) === 'due-soon'))
+const upcomingBills = computed(() =>
+  monthOccurrences.value
+    .filter((o) => statusForOccurrence(o) === 'upcoming')
+    .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
+)
+const paidBills = computed(() =>
+  paidThisMonthPayments.value
+    .map((p) => {
+      const bill = billById.value.get(p.bill_id)
+      return {
+        occurrence_id: p.occurrence_id ?? -p.id,
+        bill_id: p.bill_id,
+        due_date: p.occurrence_due_date || p.paid_date,
+        expected_amount: bill?.amount ?? null,
+        bill_name: p.bill_name || bill?.name || 'Unknown',
+        company: bill?.company || '',
+        frequency: bill?.frequency || 'Unknown',
+        autopay: (bill?.autopay as 'Yes' | 'No') || 'No',
+        payment_id: p.id,
+        paid_date: p.paid_date,
+        paid_amount: p.amount ?? null
+      } as DashboardOccurrence
+    })
+    .sort((a, b) => String(b.paid_date || '').localeCompare(String(a.paid_date || '')))
+)
+const dueThisMonthBills = computed(() => monthOccurrences.value.filter((o) => statusForOccurrence(o) !== 'paid'))
+
 const paidThisMonthPayments = computed(() => {
-  const inMonth = payments.value.filter((p) => String(p.paid_date || '').startsWith(monthKey.value))
-  const monthBillIds = new Set(monthBills.value.map((b) => b.id))
-  return inMonth.filter((p) => monthBillIds.has(p.bill_id))
+  return payments.value.filter((p) => String(p.paid_date || '').startsWith(monthKey.value))
 })
 
-const amtOverdue = computed(() => overdueBills.value.reduce((s, b) => s + (Number(b.amount) || 0), 0))
-const amtSoon = computed(() => soonBills.value.reduce((s, b) => s + (Number(b.amount) || 0), 0))
-const amtDueThisMonth = computed(() => dueThisMonthBills.value.reduce((s, b) => s + (Number(b.amount) || 0), 0))
+const amtOverdue = computed(() => overdueBills.value.reduce((s, b) => s + (Number(b.expected_amount) || 0), 0))
+const amtSoon = computed(() => soonBills.value.reduce((s, b) => s + (Number(b.expected_amount) || 0), 0))
+const amtDueThisMonth = computed(() => dueThisMonthBills.value.reduce((s, b) => s + (Number(b.expected_amount) || 0), 0))
 const amtPaidThisMonth = computed(() => paidThisMonthPayments.value.reduce((s, p) => s + (Number(p.amount) || 0), 0))
 
 async function loadDashboard() {
@@ -203,25 +163,14 @@ async function loadDashboard() {
     cutoff.setMonth(cutoff.getMonth() - 6)
     const from = fmtIsoDate(cutoff)
     const to = fmtIsoDate(today())
-    const [b, p] = await Promise.all([api.get<Bill[]>('/api/bills'), api.get<Payment[]>(`/api/payments?from=${from}&to=${to}`)])
+    const [b, p, d] = await Promise.all([
+      api.get<Bill[]>('/api/bills'),
+      api.get<Payment[]>(`/api/payments?from=${from}&to=${to}`),
+      api.get<DashboardResponse>('/api/dashboard-occurrences')
+    ])
     bills.value = b
     payments.value = p
-
-    // Custom bills need their next due date from details endpoint.
-    const customBills = b.filter((x) => x.frequency === 'Custom')
-    const pairs = await Promise.all(
-      customBills.map(async (cb) => {
-        try {
-          const details = await api.get<{ upcoming: string[] }>(`/api/bills/${cb.id}/details`)
-          return [cb.id, details.upcoming?.[0] || null] as const
-        } catch {
-          return [cb.id, null] as const
-        }
-      })
-    )
-    const map: Record<number, string | null> = {}
-    for (const [id, next] of pairs) map[id] = next
-    customNextDueByBillId.value = map
+    occurrences.value = d.occurrences || []
   } catch (e: any) {
     err.value = e?.message || 'Failed to load dashboard'
   } finally {
@@ -249,7 +198,7 @@ function closeDetail() {
   detailBillId.value = null
 }
 
-async function undoLatestPayment(billId: number) {
+async function undoLatestPayment(billId: number, paymentId?: number | null) {
   const ok = await confirm({
     title: 'Remove payment?',
     message: 'Remove the most recent payment for this bill?',
@@ -258,26 +207,29 @@ async function undoLatestPayment(billId: number) {
     tone: 'danger',
   })
   if (!ok) return
+  if (paymentId) {
+    await api.del(`/api/payments/${paymentId}`)
+    await loadDashboard()
+    return
+  }
   const pays = await api.get<Payment[]>(`/api/payments?bill_id=${billId}`)
   if (!pays.length) return
   await api.del(`/api/payments/${pays[0].id}`)
   await loadDashboard()
 }
 
-function paidAmountForBill(billId: number) {
-  const p = lastPayByBillId.value.get(billId)
-  return p?.amount ?? null
+function paidAmountForBill(occ: DashboardOccurrence) {
+  return occ.paid_amount ?? null
 }
 
-function daysLabelForBill(b: Bill, status: Status) {
-  const nd = calcNextDue(b)
+function daysLabelForBill(occ: DashboardOccurrence, status: Status) {
+  const nd = new Date(occ.due_date + 'T00:00:00')
   const days = daysUntil(nd)
   if (status === 'overdue' && days != null) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`
   if (status === 'due-soon' && days != null) return days === 0 ? 'Due today!' : `In ${days} day${days === 1 ? '' : 's'}`
   if (status === 'upcoming' && days != null) return `In ${days} days`
   if (status === 'paid') {
-    const p = lastPayByBillId.value.get(b.id)
-    if (p?.paid_date) return `Paid ${fmtDate(p.paid_date)}`
+    if (occ.paid_date) return `Paid ${fmtDate(occ.paid_date)}`
   }
   return ''
 }
@@ -333,24 +285,24 @@ onMounted(loadDashboard)
             <div v-if="!overdueBills.length" class="none-msg">No overdue bills 🎉</div>
             <div
               v-for="b in overdueBills"
-              :key="b.id"
+              :key="b.occurrence_id"
               class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--red)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
             >
               <div>
-                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.bill_id)">{{ b.bill_name }}</div>
                 <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
                 <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="text-[1.3rem] font-medium">{{ fmtDate(b.due_date) }}</div>
                 <div class="mt-[2px] text-[1.1rem] text-[color:var(--ink-light)]">{{ daysLabelForBill(b, 'overdue') }}</div>
               </div>
               <div class="flex flex-col items-end gap-[3px]">
-                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.expected_amount != null ? fmtMoney(b.expected_amount) : '—' }}</div>
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--red-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--red)]">⚠ Overdue</span></div>
-              <button class="btn btn-pay btn-sm" @click="openPay(b.id)">Mark Paid</button>
+              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id)">Mark Paid</button>
             </div>
           </div>
         </section>
@@ -361,24 +313,24 @@ onMounted(loadDashboard)
             <div v-if="!soonBills.length" class="none-msg">Nothing due in the next 15 days</div>
             <div
               v-for="b in soonBills"
-              :key="b.id"
+              :key="b.occurrence_id"
               class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--amber)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
             >
               <div>
-                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.bill_id)">{{ b.bill_name }}</div>
                 <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
                 <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="text-[1.3rem] font-medium">{{ fmtDate(b.due_date) }}</div>
                 <div class="mt-[2px] text-[1.1rem] text-[color:var(--ink-light)]">{{ daysLabelForBill(b, 'due-soon') }}</div>
               </div>
               <div class="flex flex-col items-end gap-[3px]">
-                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.expected_amount != null ? fmtMoney(b.expected_amount) : '—' }}</div>
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--amber-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--amber)]">⏰ Due Soon</span></div>
-              <button class="btn btn-pay btn-sm" @click="openPay(b.id)">Mark Paid</button>
+              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id)">Mark Paid</button>
             </div>
           </div>
         </section>
@@ -389,24 +341,24 @@ onMounted(loadDashboard)
             <div v-if="!upcomingBills.length" class="none-msg">No upcoming bills</div>
             <div
               v-for="b in upcomingBills"
-              :key="b.id"
+              :key="b.occurrence_id"
               class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--blue)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
             >
               <div>
-                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.bill_id)">{{ b.bill_name }}</div>
                 <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
                 <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="text-[1.3rem] font-medium">{{ fmtDate(b.due_date) }}</div>
                 <div class="mt-[2px] text-[1.1rem] text-[color:var(--ink-light)]">{{ daysLabelForBill(b, 'upcoming') }}</div>
               </div>
               <div class="flex flex-col items-end gap-[3px]">
-                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.expected_amount != null ? fmtMoney(b.expected_amount) : '—' }}</div>
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--blue-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--blue)]">📅 Upcoming</span></div>
-              <button class="btn btn-pay btn-sm" @click="openPay(b.id)">Mark Paid</button>
+              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id)">Mark Paid</button>
             </div>
           </div>
         </section>
@@ -417,25 +369,25 @@ onMounted(loadDashboard)
             <div v-if="!paidBills.length" class="none-msg">No payments recorded this month</div>
             <div
               v-for="b in paidBills"
-              :key="b.id"
+              :key="b.occurrence_id"
               class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] opacity-[.82] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--green)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
             >
               <div>
-                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.bill_id)">{{ b.bill_name }}</div>
                 <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
                 <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="text-[1.3rem] font-medium">{{ fmtDate(b.due_date) }}</div>
                 <div class="mt-[2px] text-[1.1rem] text-[color:var(--green-dark)]">{{ daysLabelForBill(b, 'paid') }}</div>
               </div>
               <div class="flex flex-col items-end gap-[3px]">
-                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
-                <div v-if="paidAmountForBill(b.id) != null" class="text-[1.1rem] leading-none text-[color:var(--green)]">{{ fmtMoney(paidAmountForBill(b.id) as any) }}</div>
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.expected_amount != null ? fmtMoney(b.expected_amount) : '—' }}</div>
+                <div v-if="paidAmountForBill(b) != null" class="text-[1.1rem] leading-none text-[color:var(--green)]">{{ fmtMoney(paidAmountForBill(b) as any) }}</div>
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--green-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--green)]">✅ Paid</span></div>
-              <button class="btn btn-undo btn-sm" @click="undoLatestPayment(b.id)">Undo</button>
+              <button class="btn btn-undo btn-sm" @click="undoLatestPayment(b.bill_id, b.payment_id)">Undo</button>
             </div>
           </div>
         </section>
