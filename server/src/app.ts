@@ -149,11 +149,18 @@ export function initDb() {
       due_date TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS bill_month_day_combinations (
+      bill_id INTEGER NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+      month_day TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_payments_bill_id ON payments(bill_id);
     CREATE INDEX IF NOT EXISTS idx_payments_paid_date ON payments(paid_date);
     CREATE INDEX IF NOT EXISTS idx_bill_custom_dates_bill_id ON bill_custom_dates(bill_id);
     CREATE INDEX IF NOT EXISTS idx_bill_custom_dates_due_date ON bill_custom_dates(due_date);
+    CREATE INDEX IF NOT EXISTS idx_bill_month_day_bill_id ON bill_month_day_combinations(bill_id);
   `);
+  ensureDb().exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_bill_month_day_combo ON bill_month_day_combinations(bill_id, month_day)`);
 
   ensureDb().exec(`
     CREATE TABLE IF NOT EXISTS bill_occurrences (
@@ -243,9 +250,8 @@ function backfillOccurrencesAndPaymentLinks() {
   const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all() as any[];
   const now = startOfDay();
   const defaultStart = new Date(now);
-  const defaultEnd = new Date(now);
+  const defaultEnd = futureHorizonEnd(now);
   defaultStart.setFullYear(defaultStart.getFullYear() - 2);
-  defaultEnd.setFullYear(defaultEnd.getFullYear() + 2);
 
   for (const bill of bills) {
     const paidRange = ensureDb()
@@ -291,8 +297,7 @@ function backfillOccurrencesAndPaymentLinks() {
 export function generateFutureOccurrencesForAllBills() {
   const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all() as any[];
   const start = startOfDay();
-  const end = new Date(start);
-  end.setFullYear(end.getFullYear() + OCCURRENCE_FUTURE_YEARS);
+  const end = futureHorizonEnd(start);
   for (const bill of bills) {
     upsertOccurrencesForBill(bill, start, end);
   }
@@ -342,6 +347,10 @@ function seedPaymentMethods() {
 
 function startOfDay(d = new Date()) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function futureHorizonEnd(base = startOfDay()) {
+  return new Date(base.getFullYear() + OCCURRENCE_FUTURE_YEARS, 11, 31);
 }
 
 function formatDate(d: Date) {
@@ -434,6 +443,25 @@ function calcOccurrences(bill: any, startDate: Date, endDate: Date) {
       .map((row: any) => row.due_date);
   }
 
+  if (freq === 'Yearly (Month/Day)') {
+    const rows = ensureDb()
+      .prepare('SELECT month_day FROM bill_month_day_combinations WHERE bill_id = ? ORDER BY month_day')
+      .all(bill.id) as Array<{ month_day: string }>;
+    const parsed = rows
+      .map((r) => parseMonthDay(String(r.month_day || '')))
+      .filter((v): v is { month: number; day: number } => Boolean(v));
+    if (!parsed.length) return [];
+    for (let y = startDate.getFullYear() - 1; y <= endDate.getFullYear() + 1; y += 1) {
+      for (const md of parsed) {
+        const last = new Date(y, md.month, 0).getDate();
+        const dt = new Date(y, md.month - 1, Math.min(md.day, last));
+        if (dt >= startDate && dt <= endDate) result.push(formatDate(dt));
+      }
+    }
+    result.sort();
+    return Array.from(new Set(result));
+  }
+
   if (freq === 'Monthly') {
     const day = Number(bill.due_day);
     if (!day) return [];
@@ -507,6 +535,7 @@ const FrequencySchema = z.enum([
   'Weekly',
   'Bi-Weekly',
   'Estimated Tax (US/NY)',
+  'Yearly (Month/Day)',
   'Custom'
 ]);
 
@@ -533,6 +562,39 @@ function parseParamNumber(name: string, raw: unknown) {
   const n = Number(raw);
   if (!Number.isFinite(n)) throw new Error(`${name} must be a number`);
   return n;
+}
+
+function parseMonthDay(value: string) {
+  const m = /^(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+  if (!m) return null;
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+  const maxDay = new Date(2000, month, 0).getDate();
+  if (day > maxDay) return null;
+  return { month, day };
+}
+
+function normalizeMonthDay(value: string) {
+  const parsed = parseMonthDay(value);
+  if (!parsed) return null;
+  return `${String(parsed.month).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
+}
+
+function getBillMonthDayCombinations(billId: number) {
+  return ensureDb()
+    .prepare('SELECT month_day FROM bill_month_day_combinations WHERE bill_id = ? ORDER BY month_day')
+    .all(billId)
+    .map((r: any) => String(r.month_day));
+}
+
+function attachBillSchedule(bill: any) {
+  if (!bill) return bill;
+  return {
+    ...bill,
+    month_day_combinations: getBillMonthDayCombinations(Number(bill.id))
+  };
 }
 
 // Middleware
@@ -705,7 +767,8 @@ app.delete('/api/payment-methods/:name', (req, res) => {
 
 // --- Bills ---
 app.get('/api/bills', (_req, res) => {
-  res.json(ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills ORDER BY name`).all());
+  const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills ORDER BY name`).all() as any[];
+  res.json(bills.map((b) => attachBillSchedule(b)));
 });
 
 app.get('/api/bills/:id', (req, res) => {
@@ -714,7 +777,7 @@ app.get('/api/bills/:id', (req, res) => {
     res.status(404).json({ error: 'Bill not found' });
     return;
   }
-  res.json(bill);
+  res.json(attachBillSchedule(bill));
 });
 
 app.get('/api/bills/:id/details', (req, res) => {
@@ -730,8 +793,7 @@ app.get('/api/bills/:id/details', (req, res) => {
     .all(billId);
 
   const today = startOfDay();
-  const end = new Date(today);
-  end.setFullYear(end.getFullYear() + 2);
+  const end = futureHorizonEnd(today);
 
   upsertOccurrencesForBill(bill, today, end);
   const upcoming = ensureDb()
@@ -746,7 +808,7 @@ app.get('/api/bills/:id/details', (req, res) => {
     .map((r: any) => r.due_date);
 
   res.json({
-    bill,
+    bill: attachBillSchedule(bill),
     upcoming,
     payments
   });
@@ -767,10 +829,21 @@ app.post('/api/bills', (req, res) => {
       method: z.string().optional().default(''),
       account: z.string().optional().default(''),
       notes: z.string().optional().default(''),
-      custom_dates: z.array(IsoDateSchema).optional().default([])
+      custom_dates: z.array(IsoDateSchema).optional().default([]),
+      month_day_combinations: z.array(z.string().trim().regex(/^\d{2}-\d{2}$/)).optional().default([])
     })
   );
   if (!d) return;
+  const parsedMonthDays = (d.month_day_combinations || []).map((v) => normalizeMonthDay(v));
+  const normalizedMonthDays = Array.from(new Set(parsedMonthDays.filter(Boolean))) as string[];
+  if (d.frequency === 'Yearly (Month/Day)' && !normalizedMonthDays.length) {
+    res.status(400).json({ error: 'At least one month/day combination is required' });
+    return;
+  }
+  if (parsedMonthDays.some((v) => !v)) {
+    res.status(400).json({ error: 'month_day_combinations must be valid MM-DD values' });
+    return;
+  }
   const insert = ensureDb().prepare(
     `INSERT INTO bills (name, company, frequency, due_day, next_date, amount, autopay, method, account, notes)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -795,21 +868,22 @@ app.post('/api/bills', (req, res) => {
     for (const dt of d.custom_dates || []) {
       if (dt) insertCustomDate.run(billId, dt);
     }
+    const insertMonthDay = ensureDb().prepare('INSERT INTO bill_month_day_combinations (bill_id, month_day) VALUES (?, ?)');
+    for (const md of normalizedMonthDays) insertMonthDay.run(billId, md);
 
     savePaymentMethod(d.method);
     const insertedBill = getBillById(billId) as any;
     if (insertedBill) {
       const start = startOfDay();
-      const end = new Date(start);
+      const end = futureHorizonEnd(start);
       start.setFullYear(start.getFullYear() - 1);
-      end.setFullYear(end.getFullYear() + 2);
       upsertOccurrencesForBill(insertedBill, start, end);
     }
     return billId;
   });
 
   const billId = tx();
-  res.status(201).json(getBillById(billId));
+  res.status(201).json(attachBillSchedule(getBillById(billId)));
 });
 
 app.put('/api/bills/:id', (req, res) => {
@@ -833,10 +907,21 @@ app.put('/api/bills/:id', (req, res) => {
       method: z.string().optional().default(''),
       account: z.string().optional().default(''),
       notes: z.string().optional().default(''),
-      custom_dates: z.array(IsoDateSchema).optional().default([])
+      custom_dates: z.array(IsoDateSchema).optional().default([]),
+      month_day_combinations: z.array(z.string().trim().regex(/^\d{2}-\d{2}$/)).optional().default([])
     })
   );
   if (!d) return;
+  const parsedMonthDays = (d.month_day_combinations || []).map((v) => normalizeMonthDay(v));
+  const normalizedMonthDays = Array.from(new Set(parsedMonthDays.filter(Boolean))) as string[];
+  if (d.frequency === 'Yearly (Month/Day)' && !normalizedMonthDays.length) {
+    res.status(400).json({ error: 'At least one month/day combination is required' });
+    return;
+  }
+  if (parsedMonthDays.some((v) => !v)) {
+    res.status(400).json({ error: 'month_day_combinations must be valid MM-DD values' });
+    return;
+  }
 
   const tx = ensureDb().transaction(() => {
     ensureDb()
@@ -864,13 +949,15 @@ app.put('/api/bills/:id', (req, res) => {
     for (const dt of d.custom_dates || []) {
       if (dt) insertCustomDate.run(billId, dt);
     }
+    ensureDb().prepare('DELETE FROM bill_month_day_combinations WHERE bill_id = ?').run(billId);
+    const insertMonthDay = ensureDb().prepare('INSERT INTO bill_month_day_combinations (bill_id, month_day) VALUES (?, ?)');
+    for (const md of normalizedMonthDays) insertMonthDay.run(billId, md);
 
     savePaymentMethod(d.method);
     const updatedBill = getBillById(billId) as any;
     if (updatedBill) {
       const start = startOfDay();
-      const end = new Date(start);
-      end.setFullYear(end.getFullYear() + 2);
+      const end = futureHorizonEnd(start);
       const frequencyChanged = String((existing as any).frequency || '') !== String(d.frequency || '');
       if (frequencyChanged) {
         regenerateFutureUnpaidOccurrencesForBill(updatedBill, start, end);
@@ -881,7 +968,7 @@ app.put('/api/bills/:id', (req, res) => {
   });
 
   tx();
-  res.json(getBillById(billId));
+  res.json(attachBillSchedule(getBillById(billId)));
 });
 
 app.delete('/api/bills/:id', (req, res) => {

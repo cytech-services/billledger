@@ -15,6 +15,7 @@ type Bill = {
   method?: string | null
   account?: string | null
   notes?: string | null
+  month_day_combinations?: string[] | null
 }
 
 const props = defineProps<{
@@ -46,8 +47,9 @@ const methodPickerEl = ref<HTMLElement | null>(null)
 const account = ref('')
 const notes = ref('')
 const customDates = ref<string[]>([])
+const monthDayCombinations = ref<string[]>([])
 
-const needsDate = computed(() => !['Monthly', 'Weekly', 'Custom', 'Estimated Tax (US/NY)'].includes(frequency.value))
+const needsDate = computed(() => !['Monthly', 'Weekly', 'Custom', 'Estimated Tax (US/NY)', 'Yearly (Month/Day)'].includes(frequency.value))
 
 const dayLabel = computed(() => {
   const map: Record<string, string> = {
@@ -59,13 +61,19 @@ const dayLabel = computed(() => {
     Annual: 'Next Due Date *',
     'Bi-Weekly': 'Next Due Date *',
     'Estimated Tax (US/NY)': 'Schedule',
+    'Yearly (Month/Day)': '',
     Custom: '',
   }
   return map[frequency.value] || 'Due *'
 })
 
-const showDayField = computed(() => frequency.value !== 'Custom' && frequency.value !== 'Estimated Tax (US/NY)')
+const showDayField = computed(
+  () => frequency.value !== 'Custom' && frequency.value !== 'Estimated Tax (US/NY)' && frequency.value !== 'Yearly (Month/Day)'
+)
 const showCustomDates = computed(() => frequency.value === 'Custom')
+const showMonthDayCombinations = computed(() => frequency.value === 'Yearly (Month/Day)')
+const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
+const dayOptions = Array.from({ length: 31 }, (_, i) => i + 1)
 const filteredPaymentMethods = computed(() => {
   const q = methodSearch.value.trim().toLowerCase()
   if (!q) return paymentMethods.value
@@ -103,9 +111,13 @@ watch(
     methodSearch.value = method.value
     methodPickerOpen.value = false
     customDates.value = []
+    monthDayCombinations.value = []
     if (b?.frequency === 'Custom') {
       // For now we start blank; custom-date editing will be improved later.
       customDates.value = []
+    }
+    if (b?.frequency === 'Yearly (Month/Day)') {
+      monthDayCombinations.value = Array.isArray(b.month_day_combinations) ? b.month_day_combinations.filter(Boolean) : []
     }
     const nd = b?.next_date || ''
     const dd = b?.due_day != null ? String(b.due_day) : ''
@@ -157,12 +169,49 @@ async function removeCustomDate(i: number) {
   customDates.value.splice(i, 1)
 }
 
+function addMonthDayCombination() {
+  monthDayCombinations.value.push('')
+}
+async function removeMonthDayCombination(i: number) {
+  const ok = await confirm({
+    title: 'Remove month/day?',
+    message: 'Remove this month/day combination?',
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
+  if (!ok) return
+  monthDayCombinations.value.splice(i, 1)
+}
+
+function getMonthPart(value: string) {
+  const m = /^(\d{2})-(\d{2})$/.exec(String(value || '').trim())
+  if (!m) return ''
+  return String(Number(m[1]))
+}
+
+function getDayPart(value: string) {
+  const m = /^(\d{2})-(\d{2})$/.exec(String(value || '').trim())
+  if (!m) return ''
+  return String(Number(m[2]))
+}
+
+function updateMonthDayCombination(index: number, part: 'month' | 'day', raw: string) {
+  const current = monthDayCombinations.value[index] || ''
+  const month = Number(part === 'month' ? raw : getMonthPart(current) || 1)
+  const day = Number(part === 'day' ? raw : getDayPart(current) || 1)
+  const mm = String(Math.min(Math.max(month, 1), 12)).padStart(2, '0')
+  const dd = String(Math.min(Math.max(day, 1), 31)).padStart(2, '0')
+  monthDayCombinations.value[index] = `${mm}-${dd}`
+}
+
 async function save() {
   if (!name.value.trim()) return
   if (!frequency.value) return
   if (frequency.value === 'Monthly' && !dueDayOrNextDate.value) return
   if (needsDate.value && !dueDayOrNextDate.value) return
   if (frequency.value === 'Custom' && !customDates.value.filter(Boolean).length) return
+  if (frequency.value === 'Yearly (Month/Day)' && !monthDayCombinations.value.filter(Boolean).length) return
 
   const body: any = {
     name: name.value.trim(),
@@ -176,6 +225,10 @@ async function save() {
     account: account.value.trim(),
     notes: notes.value.trim(),
     custom_dates: frequency.value === 'Custom' ? customDates.value.filter(Boolean) : [],
+    month_day_combinations:
+      frequency.value === 'Yearly (Month/Day)'
+        ? monthDayCombinations.value.map((v) => String(v || '').trim()).filter(Boolean)
+        : [],
   }
 
   saving.value = true
@@ -227,6 +280,7 @@ onUnmounted(() => {
             <option>Weekly</option>
             <option>Bi-Weekly</option>
             <option>Estimated Tax (US/NY)</option>
+            <option>Yearly (Month/Day)</option>
             <option>Custom</option>
           </select>
         </div>
@@ -250,6 +304,27 @@ onUnmounted(() => {
           <button type="button" class="mt-1 inline-flex w-auto items-center gap-[5px] rounded-[7px] border border-dashed border-[color:var(--accent)] px-3 py-1.5 text-[1.2rem] font-semibold text-[color:var(--accent)] transition-all hover:bg-[color:var(--accent-light)]" @click="addCustomDate()">+ Add Date</button>
           <div class="mt-[10px] rounded-md bg-[color:var(--paper-dark)] px-[10px] py-[7px] text-[1.1rem] leading-[1.5] text-[color:var(--ink-light)]">
             Add each specific date this bill is due. You can add as many dates as needed.
+          </div>
+        </div>
+
+        <div v-if="showMonthDayCombinations" class="col-span-2 rounded-[9px] border border-[color:var(--border)] bg-[color:var(--paper)] p-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <label class="mb-[10px] block">Yearly Month/Day Combinations *</label>
+          <div>
+            <div v-for="(md,i) in monthDayCombinations" :key="i" class="mb-2 flex items-center gap-2">
+              <select class="w-[48%]" :value="getMonthPart(md)" @change="updateMonthDayCombination(i, 'month', ($event.target as HTMLSelectElement).value)">
+                <option value="">Month</option>
+                <option v-for="m in monthOptions" :key="m" :value="String(m)">{{ new Date(2000, m - 1, 1).toLocaleDateString('en-US', { month: 'short' }) }}</option>
+              </select>
+              <select class="w-[40%]" :value="getDayPart(md)" @change="updateMonthDayCombination(i, 'day', ($event.target as HTMLSelectElement).value)">
+                <option value="">Day</option>
+                <option v-for="d in dayOptions" :key="d" :value="String(d)">{{ d }}</option>
+              </select>
+              <button type="button" class="rounded-lg bg-[color:var(--red-light)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95" @click="removeMonthDayCombination(i)">✕</button>
+            </div>
+          </div>
+          <button type="button" class="mt-1 inline-flex w-auto items-center gap-[5px] rounded-[7px] border border-dashed border-[color:var(--accent)] px-3 py-1.5 text-[1.2rem] font-semibold text-[color:var(--accent)] transition-all hover:bg-[color:var(--accent-light)]" @click="addMonthDayCombination()">+ Add Month/Day</button>
+          <div class="mt-[10px] rounded-md bg-[color:var(--paper-dark)] px-[10px] py-[7px] text-[1.1rem] leading-[1.5] text-[color:var(--ink-light)]">
+            Pick month and day for each yearly due date. You can add multiple combinations.
           </div>
         </div>
 

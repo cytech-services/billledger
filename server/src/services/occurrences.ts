@@ -7,6 +7,7 @@ export type Frequency =
   | 'Weekly'
   | 'Bi-Weekly'
   | 'Estimated Tax (US/NY)'
+  | 'Yearly (Month/Day)'
   | 'Custom';
 
 export function formatDate(d: Date) {
