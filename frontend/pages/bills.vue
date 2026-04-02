@@ -17,6 +17,7 @@ type Bill = {
   method?: string | null
   account?: string | null
   notes?: string | null
+  month_day_combinations?: string[] | null
 }
 
 const api = useApi()
@@ -54,6 +55,21 @@ function fmtDate(d?: string | null) {
 }
 
 function dueText(b: Bill) {
+  if (b.frequency === 'Yearly (Month/Day)') {
+    const combos = Array.isArray(b.month_day_combinations) ? b.month_day_combinations : []
+    if (!combos.length) return '—'
+    return combos
+      .map((md) => {
+        const m = /^(\d{2})-(\d{2})$/.exec(String(md || '').trim())
+        if (!m) return String(md || '')
+        const month = Number(m[1])
+        const day = Number(m[2])
+        if (month < 1 || month > 12 || day < 1 || day > 31) return String(md || '')
+        return `${new Date(2000, month - 1, 1).toLocaleDateString('en-US', { month: 'short' })} ${day}`
+      })
+      .filter(Boolean)
+      .join(', ')
+  }
   if (b.frequency === 'Monthly' && b.due_day) return `Day ${b.due_day}`
   if (b.frequency === 'Weekly' && b.due_day != null) return `Weekday ${b.due_day}`
   if (b.frequency === 'Estimated Tax (US/NY)') return 'Jan 15, Apr 15, Jun 15, Sep 15'

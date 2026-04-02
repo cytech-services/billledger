@@ -205,6 +205,7 @@ function upsertOccurrencesForBill(bill: any, startDate: Date, endDate: Date) {
 
 function regenerateFutureUnpaidOccurrencesForBill(bill: any, fromDate: Date, endDate: Date) {
   const from = formatDate(fromDate);
+  const to = formatDate(endDate);
   // Keep any occurrence that already has at least one payment linked to it.
   ensureDb()
     .prepare(
@@ -212,6 +213,7 @@ function regenerateFutureUnpaidOccurrencesForBill(bill: any, fromDate: Date, end
       DELETE FROM bill_occurrences
       WHERE bill_id = ?
         AND due_date >= ?
+        AND due_date <= ?
         AND id NOT IN (
           SELECT DISTINCT occurrence_id
           FROM payments
@@ -219,7 +221,7 @@ function regenerateFutureUnpaidOccurrencesForBill(bill: any, fromDate: Date, end
         )
     `
     )
-    .run(bill.id, from);
+    .run(bill.id, from, to);
 
   upsertOccurrencesForBill(bill, fromDate, endDate);
 }
@@ -249,9 +251,8 @@ function ensureOccurrencesForBillAroundDate(bill: any, paidDate: string) {
 function backfillOccurrencesAndPaymentLinks() {
   const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all() as any[];
   const now = startOfDay();
-  const defaultStart = new Date(now);
-  const defaultEnd = futureHorizonEnd(now);
-  defaultStart.setFullYear(defaultStart.getFullYear() - 2);
+  const defaultStart = backfillWindowStart(now);
+  const defaultEnd = backfillWindowEnd(now);
 
   for (const bill of bills) {
     const paidRange = ensureDb()
@@ -351,6 +352,14 @@ function startOfDay(d = new Date()) {
 
 function futureHorizonEnd(base = startOfDay()) {
   return new Date(base.getFullYear() + OCCURRENCE_FUTURE_YEARS, 11, 31);
+}
+
+function backfillWindowStart(base = startOfDay()) {
+  return new Date(base.getFullYear() - 2, 0, 1);
+}
+
+function backfillWindowEnd(base = startOfDay()) {
+  return new Date(base.getFullYear() + 2, 11, 31);
 }
 
 function formatDate(d: Date) {
@@ -874,9 +883,8 @@ app.post('/api/bills', (req, res) => {
     savePaymentMethod(d.method);
     const insertedBill = getBillById(billId) as any;
     if (insertedBill) {
-      const start = startOfDay();
-      const end = futureHorizonEnd(start);
-      start.setFullYear(start.getFullYear() - 1);
+      const start = backfillWindowStart(startOfDay());
+      const end = backfillWindowEnd(startOfDay());
       upsertOccurrencesForBill(insertedBill, start, end);
     }
     return billId;
@@ -956,14 +964,9 @@ app.put('/api/bills/:id', (req, res) => {
     savePaymentMethod(d.method);
     const updatedBill = getBillById(billId) as any;
     if (updatedBill) {
-      const start = startOfDay();
-      const end = futureHorizonEnd(start);
-      const frequencyChanged = String((existing as any).frequency || '') !== String(d.frequency || '');
-      if (frequencyChanged) {
-        regenerateFutureUnpaidOccurrencesForBill(updatedBill, start, end);
-      } else {
-        upsertOccurrencesForBill(updatedBill, start, end);
-      }
+      const start = backfillWindowStart(startOfDay());
+      const end = backfillWindowEnd(startOfDay());
+      regenerateFutureUnpaidOccurrencesForBill(updatedBill, start, end);
     }
   });
 
