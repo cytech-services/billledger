@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import BillModal from '~/components/BillModal.vue'
+import BillDetailModal from '~/components/BillDetailModal.vue'
 import { useConfirm } from '~/composables/useConfirm'
 
 type Bill = {
@@ -25,6 +26,8 @@ const loading = ref(false)
 const err = ref<string | null>(null)
 const modalOpen = ref(false)
 const editing = ref<Bill | null>(null)
+const detailOpen = ref(false)
+const detailBillId = ref<number | null>(null)
 
 async function load() {
   loading.value = true
@@ -78,6 +81,16 @@ function closeModal() {
   editing.value = null
 }
 
+function openDetail(billId: number) {
+  detailBillId.value = billId
+  detailOpen.value = true
+}
+
+function closeDetail() {
+  detailOpen.value = false
+  detailBillId.value = null
+}
+
 async function deleteBill(id: number) {
   const ok = await confirm({
     title: 'Delete bill?',
@@ -129,7 +142,7 @@ onMounted(load)
         <tbody>
           <tr v-for="b in bills" :key="b.id" class="align-top">
             <td>
-              <strong class="cursor-pointer text-[1.45rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline">{{ b.name }}</strong>
+              <strong class="cursor-pointer text-[1.45rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</strong>
               <div class="mt-0.5 text-[1.15rem] text-[color:var(--ink-light)]">{{ b.company || '—' }}</div>
             </td>
             <td>
@@ -164,5 +177,6 @@ onMounted(load)
   </div>
 
   <BillModal :open="modalOpen" :bill="editing" @close="closeModal()" @saved="load()" />
+  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load()" />
 </template>
 
