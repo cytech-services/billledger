@@ -7,6 +7,7 @@ import { useConfirm } from '~/composables/useConfirm'
 
 type Bill = {
   id: number
+  occurrence_id?: number | null
   name: string
   company?: string
   frequency: string
@@ -178,8 +179,9 @@ async function loadDashboard() {
   }
 }
 
-function openPay(billId: number) {
-  payingBill.value = bills.value.find((x) => x.id === billId) || null
+function openPay(billId: number, occurrenceId?: number | null) {
+  const bill = bills.value.find((x) => x.id === billId) || null
+  payingBill.value = bill ? { ...bill, occurrence_id: occurrenceId ?? null } : null
   payModalOpen.value = true
 }
 
@@ -302,7 +304,7 @@ onMounted(loadDashboard)
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--red-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--red)]">⚠ Overdue</span></div>
-              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id)">Mark Paid</button>
+              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id, b.occurrence_id)">Mark Paid</button>
             </div>
           </div>
         </section>
@@ -330,7 +332,7 @@ onMounted(loadDashboard)
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--amber-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--amber)]">⏰ Due Soon</span></div>
-              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id)">Mark Paid</button>
+              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id, b.occurrence_id)">Mark Paid</button>
             </div>
           </div>
         </section>
@@ -358,7 +360,7 @@ onMounted(loadDashboard)
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--blue-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--blue)]">📅 Upcoming</span></div>
-              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id)">Mark Paid</button>
+              <button class="btn btn-pay btn-sm" @click="openPay(b.bill_id, b.occurrence_id)">Mark Paid</button>
             </div>
           </div>
         </section>

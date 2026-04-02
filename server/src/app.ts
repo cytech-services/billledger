@@ -630,22 +630,16 @@ app.get('/api/payment-methods/stats', (_req, res) => {
       `
     SELECT
       pm.name AS name,
-      COALESCE(bc.bill_count, 0) AS bill_count,
+      COALESCE(pc.bill_count, 0) AS bill_count,
       COALESCE(pc.payment_count, 0) AS payment_count,
       COALESCE(pc.total_paid, 0) AS total_paid
     FROM payment_methods pm
     LEFT JOIN (
-      SELECT method, COUNT(*) AS bill_count
-      FROM bills
-      WHERE TRIM(COALESCE(method, '')) != ''
-      GROUP BY method
-    ) bc ON LOWER(bc.method) = LOWER(pm.name)
-    LEFT JOIN (
-      SELECT method, COUNT(*) AS payment_count, COALESCE(SUM(amount), 0) AS total_paid
+      SELECT method, COUNT(*) AS payment_count, COUNT(DISTINCT bill_id) AS bill_count, COALESCE(SUM(amount), 0) AS total_paid
       FROM payments
       WHERE TRIM(COALESCE(method, '')) != ''
       GROUP BY method
-    ) pc ON LOWER(pc.method) = LOWER(pm.name)
+    ) pc ON LOWER(TRIM(pc.method)) = LOWER(TRIM(pm.name))
     ORDER BY pm.name
   `
     )
@@ -951,6 +945,7 @@ app.post('/api/payments', (req, res) => {
     res,
     z.object({
       bill_id: z.number().int(),
+      occurrence_id: z.number().int().nullable().optional(),
       paid_date: IsoDateSchema,
       amount: z.number().nonnegative().nullable().optional(),
       method: z.string().optional().default(''),
@@ -965,10 +960,24 @@ app.post('/api/payments', (req, res) => {
     res.status(404).json({ error: 'Bill not found' });
     return;
   }
+  if (d.occurrence_id != null) {
+    const occ = ensureDb()
+      .prepare('SELECT id, bill_id FROM bill_occurrences WHERE id = ?')
+      .get(Number(d.occurrence_id)) as any;
+    if (!occ || Number(occ.bill_id) !== Number(d.bill_id)) {
+      res.status(400).json({ error: 'Invalid occurrence_id for bill_id' });
+      return;
+    }
+  }
 
   const tx = ensureDb().transaction(() => {
     ensureOccurrencesForBillAroundDate(bill as any, d.paid_date);
-    const occurrenceId = nearestOccurrenceIdForPayment(Number(d.bill_id), d.paid_date);
+    let occurrenceId: number | null = null;
+    if (d.occurrence_id != null) {
+      occurrenceId = Number(d.occurrence_id);
+    } else {
+      occurrenceId = nearestOccurrenceIdForPayment(Number(d.bill_id), d.paid_date);
+    }
     ensureDb()
       .prepare(`INSERT INTO payments (bill_id, occurrence_id, paid_date, amount, method, paid_by, confirm_num, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
@@ -1132,63 +1141,61 @@ app.get('/api/year-view', (req, res) => {
 
   const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all() as any[];
 
-  const allPayments = ensureDb()
+  const allOccurrences = ensureDb()
     .prepare(
-      `SELECT p.*, o.due_date AS occurrence_due_date
-       FROM payments p
-       LEFT JOIN bill_occurrences o ON o.id = p.occurrence_id
-       WHERE p.occurrence_id IS NOT NULL
-         AND o.due_date BETWEEN ? AND ?`
+      `
+      SELECT
+        o.id AS occurrence_id,
+        o.bill_id AS bill_id,
+        b.name AS bill_name,
+        COALESCE(b.company, '') AS company,
+        COALESCE(o.expected_amount, b.amount) AS amount,
+        o.due_date AS due_date,
+        b.frequency AS frequency,
+        b.autopay AS autopay,
+        p.id AS payment_id,
+        p.paid_date AS paid_date,
+        p.paid_by AS paid_by,
+        p.amount AS paid_amount
+      FROM bill_occurrences o
+      JOIN bills b ON b.id = o.bill_id
+      LEFT JOIN payments p
+        ON p.id = (
+          SELECT p2.id
+          FROM payments p2
+          WHERE p2.occurrence_id = o.id
+          ORDER BY p2.paid_date DESC, p2.id DESC
+          LIMIT 1
+        )
+      WHERE o.due_date BETWEEN ? AND ?
+      ORDER BY o.due_date ASC, b.name ASC
+    `
     )
-    .all(startStr, endStr) as any[];
-
-  const payByOccurrence = new Map<number, any[]>();
-  for (const p of allPayments) {
-    const occId = Number(p.occurrence_id);
-    if (!Number.isFinite(occId) || occId <= 0) continue;
-    if (!payByOccurrence.has(occId)) payByOccurrence.set(occId, []);
-    payByOccurrence.get(occId)!.push(p);
-  }
-  for (const arr of payByOccurrence.values()) {
-    arr.sort((a, b) => String(b.paid_date).localeCompare(String(a.paid_date)));
-  }
-
-  const allOccurrences: any[] = [];
-  for (const bill of bills) {
-    const occRows = ensureDb()
-      .prepare(
-        `SELECT id, due_date, expected_amount
-         FROM bill_occurrences
-         WHERE bill_id = ? AND due_date BETWEEN ? AND ?
-         ORDER BY due_date`
-      )
-      .all(bill.id, startStr, endStr) as Array<{ id: number; due_date: string; expected_amount: number | null }>;
-
-    for (const occ of occRows) {
+    .all(startStr, endStr)
+    .map((occ: any) => {
       const occObj = isoDate(occ.due_date);
       let status = 'upcoming';
       if (occObj < today) status = 'overdue';
-      const paymentEntry = (payByOccurrence.get(Number(occ.id)) || [])[0] || null;
-      if (paymentEntry) status = 'paid';
+      if (occ.payment_id) status = 'paid';
       else {
         const diffDays = Math.round((occObj.getTime() - today.getTime()) / 86400000);
         if (diffDays >= 0 && diffDays <= 15) status = 'due-soon';
       }
-      allOccurrences.push({
-        bill_id: bill.id,
-        bill_name: bill.name,
-        company: bill.company || '',
-        amount: occ.expected_amount ?? bill.amount ?? null,
+      return {
+        occurrence_id: occ.occurrence_id,
+        bill_id: occ.bill_id,
+        bill_name: occ.bill_name,
+        company: occ.company,
+        amount: occ.amount,
         due_date: occ.due_date,
-        frequency: bill.frequency,
-        autopay: bill.autopay,
+        frequency: occ.frequency,
+        autopay: occ.autopay,
         status,
-        paid_date: paymentEntry ? paymentEntry.paid_date : null,
-        paid_by: paymentEntry ? paymentEntry.paid_by : null,
-        paid_amount: paymentEntry ? paymentEntry.amount : null
-      });
-    }
-  }
+        paid_date: occ.paid_date || null,
+        paid_by: occ.paid_by || null,
+        paid_amount: occ.paid_amount ?? null
+      };
+    });
 
   allOccurrences.sort((a, b) => a.due_date.localeCompare(b.due_date));
 

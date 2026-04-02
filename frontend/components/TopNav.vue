@@ -36,7 +36,7 @@ function navBtnClass(name: string) {
         <button :class="navBtnClass('yearview')" data-page="yearview" @click="navigate()">Year View</button>
       </NuxtLink>
       <NuxtLink to="/log" custom v-slot="{ navigate }">
-        <button :class="navBtnClass('log')" data-page="log" @click="navigate()">Payment Log</button>
+        <button :class="navBtnClass('log')" data-page="log" @click="navigate()">Payment History</button>
       </NuxtLink>
       <NuxtLink to="/settings" custom v-slot="{ navigate }">
         <button :class="navBtnClass('settings')" data-page="settings" @click="navigate()">Settings</button>

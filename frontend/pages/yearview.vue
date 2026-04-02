@@ -5,6 +5,7 @@ import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
 
 type YearOccurrence = {
+  occurrence_id?: number
   bill_id: number
   bill_name: string
   company: string
@@ -69,9 +70,10 @@ async function load() {
   }
 }
 
-async function openPay(billId: number) {
+async function openPay(billId: number, occurrenceId?: number | null) {
   try {
-    payingBill.value = await api.get<any>(`/api/bills/${billId}`)
+    const bill = await api.get<any>(`/api/bills/${billId}`)
+    payingBill.value = { ...bill, occurrence_id: occurrenceId ?? null }
     payOpen.value = true
   } catch (e: any) {
     err.value = e?.message || 'Unable to load bill'
@@ -211,7 +213,7 @@ onMounted(load)
                 <button
                   v-if="o.status === 'overdue' || o.status === 'upcoming'"
                   class="btn btn-pay btn-sm"
-                  @click="openPay(o.bill_id)"
+                  @click="openPay(o.bill_id, o.occurrence_id)"
                 >
                   Mark Paid
                 </button>

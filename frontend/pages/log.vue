@@ -194,7 +194,7 @@ onUnmounted(() => {
 <template>
   <div class="page active">
     <div class="mb-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-center justify-between">
-      <h2 class="font-['DM_Serif_Display'] text-[2rem]">Payment Log</h2>
+      <h2 class="font-['DM_Serif_Display'] text-[2rem]">Payment History</h2>
     </div>
     <div class="mb-4 flex flex-wrap items-end gap-3">
       <div class="min-w-[220px]">

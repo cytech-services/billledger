@@ -4,6 +4,7 @@ import { useApi } from '~/composables/useApi'
 
 type BillLike = {
   id: number
+  occurrence_id?: number | null
   name: string
   amount?: number | null
   method?: string | null
@@ -61,6 +62,7 @@ async function save() {
   try {
     await api.post('/api/payments', {
       bill_id: props.bill.id,
+      occurrence_id: props.bill.occurrence_id ?? null,
       paid_date: paid_date.value,
       amount: amount.value ? Number(amount.value) : null,
       method: method.value.trim(),
