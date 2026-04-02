@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
@@ -61,15 +61,22 @@ function monthName(ym: string) {
   return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
-async function load() {
-  loading.value = true
+async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
+  const silent = options?.silent === true
+  const preserveScroll = options?.preserveScroll === true
+  const scrollY = preserveScroll ? window.scrollY : 0
+  if (!silent) loading.value = true
   err.value = null
   try {
     data.value = await api.get<YearView>(`/api/year-view?year=${currentYear.value}`)
   } catch (e: any) {
     err.value = e?.message || 'Failed to load year view'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+    if (preserveScroll) {
+      await nextTick()
+      window.scrollTo({ top: scrollY, behavior: 'auto' })
+    }
   }
 }
 
@@ -120,7 +127,7 @@ async function undoPayment(o: YearOccurrence) {
   if (!ok) return
   try {
     await api.del(`/api/payments/${o.payment_id}`)
-    await load()
+    await load({ silent: true, preserveScroll: true })
   } catch (e: any) {
     err.value = e?.message || 'Unable to remove payment'
   }
@@ -253,7 +260,7 @@ onMounted(load)
     </div>
   </div>
 
-  <PaymentModal :open="payOpen" :bill="payingBill" @close="closePay()" @saved="load()" />
-  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load()" />
+  <PaymentModal :open="payOpen" :bill="payingBill" @close="closePay()" @saved="load({ silent: true, preserveScroll: true })" />
+  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load({ silent: true, preserveScroll: true })" />
 </template>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useApi } from '~/composables/useApi'
 import BillModal from '~/components/BillModal.vue'
 
@@ -48,6 +48,7 @@ const api = useApi()
 const loading = ref(false)
 const err = ref<string | null>(null)
 const details = ref<Details | null>(null)
+const modalBodyEl = ref<HTMLElement | null>(null)
 
 const editOpen = ref(false)
 const editingBill = ref<Bill | null>(null)
@@ -75,8 +76,10 @@ function statusForUpcomingDate(iso: string) {
 
 const bill = computed(() => details.value?.bill || null)
 
-async function load() {
+async function load(options?: { preserveScroll?: boolean }) {
   if (!props.billId) return
+  const preserveScroll = options?.preserveScroll === true
+  const currentScrollTop = preserveScroll && modalBodyEl.value ? modalBodyEl.value.scrollTop : 0
   loading.value = true
   err.value = null
   try {
@@ -85,6 +88,10 @@ async function load() {
     err.value = e?.message || 'Failed to load bill details'
   } finally {
     loading.value = false
+    if (preserveScroll && modalBodyEl.value) {
+      await nextTick()
+      modalBodyEl.value.scrollTop = currentScrollTop
+    }
   }
 }
 
@@ -107,7 +114,7 @@ function closeEdit() {
 }
 async function afterEditSaved() {
   closeEdit()
-  await load()
+  await load({ preserveScroll: true })
   emit('changed')
 }
 </script>
@@ -118,7 +125,7 @@ async function afterEditSaved() {
     :class="{ '!flex': open }"
     @click.self="emit('close')"
   >
-    <div class="max-h-[92vh] w-[calc(700px*var(--layout-scale-n)/var(--layout-scale-d))] max-w-[96vw] overflow-y-auto rounded-[15px] bg-[color:var(--cream)] p-[calc(30px*var(--layout-scale-n)/var(--layout-scale-d))] shadow-[0_24px_60px_rgba(0,0,0,.18)]">
+    <div ref="modalBodyEl" class="max-h-[92vh] w-[calc(700px*var(--layout-scale-n)/var(--layout-scale-d))] max-w-[96vw] overflow-y-auto rounded-[15px] bg-[color:var(--cream)] p-[calc(30px*var(--layout-scale-n)/var(--layout-scale-d))] shadow-[0_24px_60px_rgba(0,0,0,.18)]">
       <div v-if="loading" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">Loading…</div>
       <div v-else-if="err" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">{{ err }}</div>
       <div v-else-if="!details" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">No details.</div>

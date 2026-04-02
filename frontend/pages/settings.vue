@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import { useRuntimeConfig } from '#imports'
 import { useConfirm } from '~/composables/useConfirm'
@@ -34,13 +34,20 @@ async function loadBackups() {
   backupStatus.value = s
 }
 
+async function refreshWithScroll(task: () => Promise<void>) {
+  const scrollY = window.scrollY
+  await task()
+  await nextTick()
+  window.scrollTo({ top: scrollY, behavior: 'auto' })
+}
+
 async function addMethod() {
   const name = newMethod.value.trim()
   if (!name) return
   settingsErr.value = null
   await api.post('/api/payment-methods', { name })
   newMethod.value = ''
-  await loadMethods()
+  await refreshWithScroll(loadMethods)
 }
 
 async function removeMethod(name: string) {
@@ -55,7 +62,7 @@ async function removeMethod(name: string) {
   settingsErr.value = null
   try {
     await api.del(`/api/payment-methods/${encodeURIComponent(name)}`)
-    await loadMethods()
+    await refreshWithScroll(loadMethods)
   } catch (e: any) {
     try {
       const details = JSON.parse(e?.message || '{}')
@@ -88,7 +95,7 @@ async function replaceAndDelete(oldName: string, details: any) {
   await api.post('/api/payment-methods', { name: replacement })
   await api.post('/api/payment-methods/replace', { from: oldName, to: replacement, replace_bill_defaults: true })
   await api.del(`/api/payment-methods/${encodeURIComponent(oldName)}`)
-  await loadMethods()
+  await refreshWithScroll(loadMethods)
 }
 
 async function runManualBackup() {
@@ -96,7 +103,7 @@ async function runManualBackup() {
   settingsErr.value = null
   try {
     await api.post('/api/backups')
-    await loadBackups()
+    await refreshWithScroll(loadBackups)
   } catch (e: any) {
     settingsErr.value = e?.message || 'Backup failed'
   } finally {
@@ -121,7 +128,9 @@ async function restoreBackup(filename: string) {
   settingsErr.value = null
   try {
     await api.post('/api/backups/restore', { filename })
-    await Promise.all([loadBackups(), loadMethods()])
+    await refreshWithScroll(async () => {
+      await Promise.all([loadBackups(), loadMethods()])
+    })
   } catch (e: any) {
     settingsErr.value = e?.message || 'Restore failed'
   }

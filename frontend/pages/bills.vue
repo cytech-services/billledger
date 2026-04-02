@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import BillModal from '~/components/BillModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
@@ -29,15 +29,22 @@ const editing = ref<Bill | null>(null)
 const detailOpen = ref(false)
 const detailBillId = ref<number | null>(null)
 
-async function load() {
-  loading.value = true
+async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
+  const silent = options?.silent === true
+  const preserveScroll = options?.preserveScroll === true
+  const scrollY = preserveScroll ? window.scrollY : 0
+  if (!silent) loading.value = true
   err.value = null
   try {
     bills.value = await api.get<Bill[]>('/api/bills')
   } catch (e: any) {
     err.value = e?.message || 'Failed to load bills'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+    if (preserveScroll) {
+      await nextTick()
+      window.scrollTo({ top: scrollY, behavior: 'auto' })
+    }
   }
 }
 
@@ -102,7 +109,7 @@ async function deleteBill(id: number) {
   if (!ok) return
   try {
     await api.del(`/api/bills/${id}`)
-    await load()
+    await load({ silent: true, preserveScroll: true })
   } catch (e: any) {
     err.value = e?.message || 'Failed to delete bill'
   }
@@ -176,7 +183,7 @@ onMounted(load)
     </div>
   </div>
 
-  <BillModal :open="modalOpen" :bill="editing" @close="closeModal()" @saved="load()" />
-  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load()" />
+  <BillModal :open="modalOpen" :bill="editing" @close="closeModal()" @saved="load({ silent: true, preserveScroll: true })" />
+  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load({ silent: true, preserveScroll: true })" />
 </template>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import BillDetailModal from '~/components/BillDetailModal.vue'
 import { useConfirm } from '~/composables/useConfirm'
@@ -86,8 +86,11 @@ function iso(d: Date) {
   return `${y}-${m}-${day}`
 }
 
-async function load() {
-  loading.value = true
+async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
+  const silent = options?.silent === true
+  const preserveScroll = options?.preserveScroll === true
+  const scrollY = preserveScroll ? window.scrollY : 0
+  if (!silent) loading.value = true
   err.value = null
   try {
     bills.value = await api.get<Bill[]>('/api/bills')
@@ -100,7 +103,11 @@ async function load() {
   } catch (e: any) {
     err.value = e?.message || 'Failed to load payments'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+    if (preserveScroll) {
+      await nextTick()
+      window.scrollTo({ top: scrollY, behavior: 'auto' })
+    }
   }
 }
 
@@ -199,7 +206,7 @@ async function saveEdit() {
       notes: editNotes.value.trim(),
     })
     closeEdit()
-    await load()
+    await load({ silent: true, preserveScroll: true })
   } catch (e: any) {
     err.value = e?.message || 'Failed to update payment'
   } finally {
@@ -218,7 +225,7 @@ async function removePayment(id: number) {
   if (!ok) return
   try {
     await api.del(`/api/payments/${id}`)
-    await load()
+    await load({ silent: true, preserveScroll: true })
   } catch (e: any) {
     err.value = e?.message || 'Failed to remove payment'
   }
@@ -387,7 +394,7 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load()" />
+  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load({ silent: true, preserveScroll: true })" />
 
   <div class="fixed inset-0 z-[200] hidden items-center justify-center bg-[rgba(26,26,46,.52)] backdrop-blur-[3px]" :class="{ '!flex': editOpen }" @click.self="closeEdit()">
     <div class="max-h-[92vh] w-[calc(540px*var(--layout-scale-n)/var(--layout-scale-d))] max-w-[96vw] overflow-y-auto rounded-[15px] bg-[color:var(--cream)] p-[calc(30px*var(--layout-scale-n)/var(--layout-scale-d))] shadow-[0_24px_60px_rgba(0,0,0,.18)]">

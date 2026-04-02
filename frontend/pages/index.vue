@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
@@ -156,8 +156,11 @@ const amtSoon = computed(() => soonBills.value.reduce((s, b) => s + (Number(b.ex
 const amtDueThisMonth = computed(() => dueThisMonthBills.value.reduce((s, b) => s + (Number(b.expected_amount) || 0), 0))
 const amtPaidThisMonth = computed(() => paidThisMonthPayments.value.reduce((s, p) => s + (Number(p.amount) || 0), 0))
 
-async function loadDashboard() {
-  loading.value = true
+async function loadDashboard(options?: { silent?: boolean; preserveScroll?: boolean }) {
+  const silent = options?.silent === true
+  const preserveScroll = options?.preserveScroll === true
+  const scrollY = preserveScroll ? window.scrollY : 0
+  if (!silent) loading.value = true
   err.value = null
   try {
     const cutoff = today()
@@ -175,7 +178,11 @@ async function loadDashboard() {
   } catch (e: any) {
     err.value = e?.message || 'Failed to load dashboard'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+    if (preserveScroll) {
+      await nextTick()
+      window.scrollTo({ top: scrollY, behavior: 'auto' })
+    }
   }
 }
 
@@ -211,13 +218,13 @@ async function undoLatestPayment(billId: number, paymentId?: number | null) {
   if (!ok) return
   if (paymentId) {
     await api.del(`/api/payments/${paymentId}`)
-    await loadDashboard()
+    await loadDashboard({ silent: true, preserveScroll: true })
     return
   }
   const pays = await api.get<Payment[]>(`/api/payments?bill_id=${billId}`)
   if (!pays.length) return
   await api.del(`/api/payments/${pays[0].id}`)
-  await loadDashboard()
+  await loadDashboard({ silent: true, preserveScroll: true })
 }
 
 function paidAmountForBill(occ: DashboardOccurrence) {
@@ -397,7 +404,7 @@ onMounted(loadDashboard)
     </div>
   </div>
 
-  <PaymentModal :open="payModalOpen" :bill="payingBill" @close="closePay()" @saved="loadDashboard()" />
-  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="loadDashboard()" />
+  <PaymentModal :open="payModalOpen" :bill="payingBill" @close="closePay()" @saved="loadDashboard({ silent: true, preserveScroll: true })" />
+  <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="loadDashboard({ silent: true, preserveScroll: true })" />
 </template>
 
