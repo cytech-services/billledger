@@ -1071,7 +1071,7 @@ app.post('/api/payments', (req, res) => {
         d.bill_id,
         occurrenceId,
         d.paid_date,
-        d.amount || (bill as any).amount,
+        d.amount == null ? (bill as any).amount : d.amount,
         d.method || (bill as any).method || '',
         d.paid_by || '',
         d.confirm_num || '',

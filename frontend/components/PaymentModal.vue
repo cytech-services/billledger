@@ -49,6 +49,15 @@ const canAddMethod = computed(() => {
   return !paymentMethods.value.some((m) => m.toLowerCase() === q.toLowerCase())
 })
 
+function toNullableAmount(value: unknown) {
+  if (value == null) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const s = String(value).trim()
+  if (!s) return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
 function isoToday() {
   const t = new Date(new Date().toDateString())
   const y = t.getFullYear()
@@ -118,7 +127,7 @@ async function save() {
       bill_id: props.bill.id,
       occurrence_id: props.bill.occurrence_id ?? null,
       paid_date: paid_date.value,
-      amount: amount.value ? Number(amount.value) : null,
+      amount: toNullableAmount(amount.value),
       method: method.value.trim(),
       paid_by: paid_by.value.trim(),
       confirm_num: confirm_num.value.trim(),

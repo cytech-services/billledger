@@ -79,6 +79,15 @@ const totalPaid = computed(() => payments.value.reduce((s, p) => s + (Number(p.a
 const fmtMoney = (n: number | null | undefined) =>
   n == null ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+function toNullableAmount(value: unknown) {
+  if (value == null) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const s = String(value).trim()
+  if (!s) return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
 function iso(d: Date) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -199,7 +208,7 @@ async function saveEdit() {
   try {
     await api.put(`/api/payments/${editing.value.id}`, {
       paid_date: editPaidDate.value,
-      amount: editAmount.value ? Number(editAmount.value) : null,
+      amount: toNullableAmount(editAmount.value),
       method: editMethod.value.trim(),
       paid_by: editPaidBy.value.trim(),
       confirm_num: editConfirmNum.value.trim(),
