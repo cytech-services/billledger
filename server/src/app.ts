@@ -978,6 +978,18 @@ app.delete('/api/bills/:id', (req, res) => {
 });
 
 // --- Payments ---
+app.get('/api/payments/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const payment = ensureDb()
+    .prepare('SELECT p.*, b.name AS bill_name FROM payments p LEFT JOIN bills b ON b.id = p.bill_id WHERE p.id = ?')
+    .get(id);
+  if (!payment) {
+    res.status(404).json({ error: 'Payment not found' });
+    return;
+  }
+  res.json(payment);
+});
+
 app.get('/api/payments', (req, res) => {
   const billIdRaw = req.query.bill_id;
   const month = req.query.month ? String(req.query.month) : null;

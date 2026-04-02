@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
-import { useConfirm } from '~/composables/useConfirm'
+import EditPaymentModal from '~/components/EditPaymentModal.vue'
 
 type YearOccurrence = {
   occurrence_id?: number
@@ -38,13 +38,14 @@ type YearView = {
 }
 
 const api = useApi()
-const { confirm } = useConfirm()
 const currentYear = ref(new Date().getFullYear())
 const data = ref<YearView | null>(null)
 const loading = ref(false)
 const err = ref<string | null>(null)
 const payOpen = ref(false)
 const payingBill = ref<any | null>(null)
+const editOpen = ref(false)
+const editingPayment = ref<any | null>(null)
 const detailOpen = ref(false)
 const detailBillId = ref<number | null>(null)
 const upcomingOnly = ref(false)
@@ -115,22 +116,20 @@ function occPasses(o: YearOccurrence) {
   return o.status === 'upcoming' || o.status === 'overdue'
 }
 
-async function undoPayment(o: YearOccurrence) {
+async function openEditPayment(o: YearOccurrence) {
   if (!o.payment_id) return
-  const ok = await confirm({
-    title: 'Remove payment?',
-    message: 'Remove the recorded payment for this occurrence?',
-    confirmText: 'Remove',
-    cancelText: 'Cancel',
-    tone: 'danger',
-  })
-  if (!ok) return
   try {
-    await api.del(`/api/payments/${o.payment_id}`)
-    await load({ silent: true, preserveScroll: true })
+    const p = await api.get<any>(`/api/payments/${o.payment_id}`)
+    editingPayment.value = p
+    editOpen.value = true
   } catch (e: any) {
-    err.value = e?.message || 'Unable to remove payment'
+    err.value = e?.message || 'Unable to load payment'
   }
+}
+
+function closeEditPayment() {
+  editOpen.value = false
+  editingPayment.value = null
 }
 
 onMounted(load)
@@ -248,9 +247,9 @@ onMounted(load)
                 <button
                   v-else-if="o.status === 'paid'"
                   class="btn btn-undo btn-sm"
-                  @click="undoPayment(o)"
+                  @click="openEditPayment(o)"
                 >
-                  Undo
+                  Edit Payment
                 </button>
               </div>
             </div>
@@ -261,6 +260,13 @@ onMounted(load)
   </div>
 
   <PaymentModal :open="payOpen" :bill="payingBill" @close="closePay()" @saved="load({ silent: true, preserveScroll: true })" />
+  <EditPaymentModal
+    :open="editOpen"
+    :payment="editingPayment"
+    @close="closeEditPayment()"
+    @saved="load({ silent: true, preserveScroll: true })"
+    @deleted="load({ silent: true, preserveScroll: true })"
+  />
   <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load({ silent: true, preserveScroll: true })" />
 </template>
 

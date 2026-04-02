@@ -240,6 +240,28 @@ async function removePayment(id: number) {
   }
 }
 
+async function removeEditingPayment() {
+  if (!editing.value) return
+  const ok = await confirm({
+    title: 'Remove payment?',
+    message: 'Remove this payment record?',
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
+  if (!ok) return
+  saving.value = true
+  try {
+    await api.del(`/api/payments/${editing.value.id}`)
+    closeEdit()
+    await load({ silent: true, preserveScroll: true })
+  } catch (e: any) {
+    err.value = e?.message || 'Failed to remove payment'
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(() => {
   const t = new Date(new Date().toDateString())
   const from = new Date(t)
@@ -493,12 +515,15 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="mt-[calc(22px*var(--layout-scale-n)/var(--layout-scale-d))] flex justify-end gap-[calc(9px*var(--layout-scale-n)/var(--layout-scale-d))] border-t border-[color:var(--border)] pt-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))]">
-        <button class="rounded-lg border border-[color:var(--border)] px-[15px] py-2 text-[1.3rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" :disabled="saving" @click="closeEdit()">Cancel</button>
-        <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)] disabled:opacity-60" :disabled="saving || !editPaidDate" @click="saveEdit()">
-          <span v-if="saving" class="spinner"></span>
-          <span v-else>Save Changes</span>
-        </button>
+      <div class="mt-[calc(22px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-center justify-between gap-[calc(9px*var(--layout-scale-n)/var(--layout-scale-d))] border-t border-[color:var(--border)] pt-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))]">
+        <button class="rounded-lg bg-[color:var(--red-light)] px-[15px] py-2 text-[1.3rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95 disabled:opacity-60" :disabled="saving" @click="removeEditingPayment()">Delete</button>
+        <div class="flex gap-[calc(9px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <button class="rounded-lg border border-[color:var(--border)] px-[15px] py-2 text-[1.3rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" :disabled="saving" @click="closeEdit()">Cancel</button>
+          <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)] disabled:opacity-60" :disabled="saving || !editPaidDate" @click="saveEdit()">
+            <span v-if="saving" class="spinner"></span>
+            <span v-else>Save Changes</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

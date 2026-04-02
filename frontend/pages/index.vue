@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
-import { useConfirm } from '~/composables/useConfirm'
+import EditPaymentModal from '~/components/EditPaymentModal.vue'
 
 type Bill = {
   id: number
@@ -55,7 +55,6 @@ type DashboardResponse = {
 }
 
 const api = useApi()
-const { confirm } = useConfirm()
 const bills = ref<Bill[]>([])
 const payments = ref<Payment[]>([])
 const occurrences = ref<DashboardOccurrence[]>([])
@@ -64,6 +63,8 @@ const err = ref<string | null>(null)
 
 const payModalOpen = ref(false)
 const payingBill = ref<Bill | null>(null)
+const editOpen = ref(false)
+const editingPayment = ref<Payment | null>(null)
 const detailOpen = ref(false)
 const detailBillId = ref<number | null>(null)
 
@@ -207,24 +208,17 @@ function closeDetail() {
   detailBillId.value = null
 }
 
-async function undoLatestPayment(billId: number, paymentId?: number | null) {
-  const ok = await confirm({
-    title: 'Remove payment?',
-    message: 'Remove the most recent payment for this bill?',
-    confirmText: 'Remove',
-    cancelText: 'Cancel',
-    tone: 'danger',
-  })
-  if (!ok) return
-  if (paymentId) {
-    await api.del(`/api/payments/${paymentId}`)
-    await loadDashboard({ silent: true, preserveScroll: true })
-    return
-  }
-  const pays = await api.get<Payment[]>(`/api/payments?bill_id=${billId}`)
-  if (!pays.length) return
-  await api.del(`/api/payments/${pays[0].id}`)
-  await loadDashboard({ silent: true, preserveScroll: true })
+function openEditPayment(paymentId?: number | null) {
+  if (!paymentId) return
+  const payment = payments.value.find((p) => p.id === paymentId) || null
+  if (!payment) return
+  editingPayment.value = { ...payment }
+  editOpen.value = true
+}
+
+function closeEditPayment() {
+  editOpen.value = false
+  editingPayment.value = null
 }
 
 function paidAmountForBill(occ: DashboardOccurrence) {
@@ -396,7 +390,7 @@ onMounted(loadDashboard)
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--green-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--green)]">✅ Paid</span></div>
-              <button class="btn btn-undo btn-sm" @click="undoLatestPayment(b.bill_id, b.payment_id)">Undo</button>
+              <button class="btn btn-undo btn-sm" @click="openEditPayment(b.payment_id)">Edit Payment</button>
             </div>
           </div>
         </section>
@@ -405,6 +399,13 @@ onMounted(loadDashboard)
   </div>
 
   <PaymentModal :open="payModalOpen" :bill="payingBill" @close="closePay()" @saved="loadDashboard({ silent: true, preserveScroll: true })" />
+  <EditPaymentModal
+    :open="editOpen"
+    :payment="editingPayment"
+    @close="closeEditPayment()"
+    @saved="loadDashboard({ silent: true, preserveScroll: true })"
+    @deleted="loadDashboard({ silent: true, preserveScroll: true })"
+  />
   <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="loadDashboard({ silent: true, preserveScroll: true })" />
 </template>
 
