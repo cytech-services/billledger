@@ -113,35 +113,46 @@ onMounted(load)
       <p class="mb-[18px] text-[1.3rem]">Add each of your bills once and let Bill Ledger track everything.</p>
       <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)]" @click="openAdd()">+ Add Your First Bill</button>
     </div>
-    <div v-else class="overflow-x-auto">
-      <table>
+    <div v-else class="overflow-x-auto rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] shadow-[0_2px_10px_var(--shadow)]">
+      <table class="min-w-[1080px]">
         <thead>
           <tr>
             <th>Bill Name</th>
-            <th>Company</th>
             <th>Frequency</th>
             <th>Due</th>
-            <th>Amount</th>
-            <th>Auto-Pay</th>
+            <th class="text-right">Amount</th>
             <th>Method</th>
             <th>Notes</th>
-            <th></th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="b in bills" :key="b.id">
-            <td><strong class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline">{{ b.name }}</strong></td>
-            <td class="text-[color:var(--ink-light)]">{{ b.company || '—' }}</td>
-            <td>{{ b.frequency }}</td>
-            <td class="text-[color:var(--ink-light)]">{{ dueText(b) }}</td>
-            <td>{{ b.amount != null ? '$' + Number(b.amount).toFixed(2) : '—' }}</td>
-            <td>{{ b.autopay === 'Yes' ? '✅ Yes' : 'No' }}</td>
-            <td class="text-[color:var(--ink-light)]">{{ b.method || '—' }}</td>
-            <td class="max-w-[calc(140px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden text-ellipsis whitespace-nowrap text-[color:var(--ink-light)]">
+          <tr v-for="b in bills" :key="b.id" class="align-top">
+            <td>
+              <strong class="cursor-pointer text-[1.45rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline">{{ b.name }}</strong>
+              <div class="mt-0.5 text-[1.15rem] text-[color:var(--ink-light)]">{{ b.company || '—' }}</div>
+            </td>
+            <td>
+              <span class="inline-flex whitespace-nowrap rounded-full bg-[color:var(--paper-dark)] px-[8px] py-[3px] text-[1.05rem] font-bold tracking-[.3px] text-[color:var(--ink)]">
+                {{ b.frequency }}
+              </span>
+            </td>
+            <td class="text-[color:var(--ink)]">{{ dueText(b) }}</td>
+            <td class="text-right font-['DM_Serif_Display'] text-[1.55rem] text-[color:var(--ink)]">{{ b.amount != null ? '$' + Number(b.amount).toFixed(2) : '—' }}</td>
+            <td class="max-w-[220px]">
+              <div class="overflow-hidden text-ellipsis whitespace-nowrap text-[color:var(--ink-light)]">{{ b.method || '—' }}</div>
+              <span
+                class="mt-1 inline-flex whitespace-nowrap rounded-full px-[9px] py-[3px] text-[1.05rem] font-semibold"
+                :class="b.autopay === 'Yes' ? 'bg-[color:var(--blue-light)] text-[color:var(--blue)]' : 'bg-[color:var(--paper-dark)] text-[color:var(--ink-light)]'"
+              >
+                {{ b.autopay === 'Yes' ? 'AUTO-PAY' : 'Manual' }}
+              </span>
+            </td>
+            <td class="max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap text-[color:var(--ink-light)]">
               {{ b.notes || '—' }}
             </td>
             <td>
-              <div class="flex gap-[calc(7px*var(--layout-scale-n)/var(--layout-scale-d))]">
+              <div class="flex justify-end gap-[calc(7px*var(--layout-scale-n)/var(--layout-scale-d))]">
                 <button class="rounded-lg border border-[color:var(--border)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" @click="openEdit(b)">Edit</button>
                 <button class="rounded-lg bg-[color:var(--red-light)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95" @click="deleteBill(b.id)">Delete</button>
               </div>

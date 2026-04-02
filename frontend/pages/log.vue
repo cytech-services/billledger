@@ -199,19 +199,44 @@ onUnmounted(() => {
     <div class="mb-4 flex flex-wrap items-end gap-3">
       <div class="min-w-[220px]">
         <label class="mb-1 ml-1 block text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Bill</label>
-        <div ref="billPickerEl" class="msel" @keydown.esc="billPickerOpen=false">
-          <button type="button" class="msel-btn w-full justify-between" @click="billPickerOpen = !billPickerOpen">
+        <div ref="billPickerEl" class="relative" @keydown.esc="billPickerOpen=false">
+          <button
+            type="button"
+            class="inline-flex w-full min-w-[240px] items-center justify-between gap-[10px] rounded-[10px] border border-[color:var(--border)] bg-[color:var(--paper)] px-[11px] py-2 text-[1.3rem] text-[color:var(--ink)] transition-colors hover:border-[color:var(--accent)]"
+            @click="billPickerOpen = !billPickerOpen"
+          >
             {{ selectedBillsLabel }}
           </button>
-          <div v-if="billPickerOpen" class="msel-pop" @click.stop>
-            <div class="msel-top">
-              <input v-model="billSearch" class="msel-search" placeholder="Search bills…" />
+          <div
+            v-if="billPickerOpen"
+            class="absolute left-0 top-[calc(100%+6px)] z-50 w-[320px] max-w-[72vw] rounded-xl border border-[color:var(--border)] bg-[color:var(--cream)] p-[10px] shadow-[0_8px_30px_var(--shadow)]"
+            @click.stop
+          >
+            <div class="mb-2 flex items-center gap-2">
+              <input
+                v-model="billSearch"
+                class="flex-1 px-[10px] py-2 text-[1.3rem]"
+                placeholder="Search bills…"
+              />
               <button type="button" class="rounded-lg border border-[color:var(--border)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" @click="clearBills()">Clear</button>
             </div>
-            <div class="msel-list">
-              <label v-for="b in filteredBills" :key="b.id" class="msel-item">
-                <input type="checkbox" :checked="selectedBillIdsSet.has(b.id)" @change="toggleBill(b.id)" />
-                <span>{{ b.name }}</span>
+            <div class="max-h-[260px] space-y-1 overflow-auto pr-1">
+              <label
+                v-for="b in filteredBills"
+                :key="b.id"
+                class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-[8px] py-[7px] text-[color:var(--ink)] transition-colors"
+                :class="selectedBillIdsSet.has(b.id) ? 'border-[color:var(--accent)] bg-[color:var(--accent-light)]' : 'border-transparent hover:border-[color:var(--border)] hover:bg-[color:var(--paper-dark)]'"
+              >
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 shrink-0 accent-[color:var(--accent)]"
+                  :checked="selectedBillIdsSet.has(b.id)"
+                  @change="toggleBill(b.id)"
+                />
+                <span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[1.28rem] font-medium">
+                  {{ b.name }}
+                </span>
+                <span v-if="selectedBillIdsSet.has(b.id)" class="shrink-0 text-[1.1rem] font-semibold text-[color:var(--accent-dark)]">Selected</span>
               </label>
               <div v-if="!filteredBills.length" class="mt-2 p-0 text-center text-[1.3rem] italic text-[color:var(--ink-light)]">No matches</div>
             </div>
