@@ -48,7 +48,7 @@ const editOpen = ref(false)
 const editingPayment = ref<any | null>(null)
 const detailOpen = ref(false)
 const detailBillId = ref<number | null>(null)
-const upcomingOnly = ref(false)
+const filterMode = ref<'all' | 'unpaid' | 'paid'>('all')
 
 const fmtMoney = (n: number | null | undefined) =>
   n == null ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -56,6 +56,13 @@ const fmtMoney = (n: number | null | undefined) =>
 const overdueOccurrences = computed(() => (data.value?.months || []).flatMap((m) => m.occurrences).filter((o) => o.status === 'overdue'))
 const overdueCount = computed(() => overdueOccurrences.value.length)
 const overdueAmount = computed(() => overdueOccurrences.value.reduce((s, o) => s + (Number(o.amount) || 0), 0))
+
+function monthPaidTotal(m: YearMonth) {
+  return m.occurrences.reduce((sum, o) => {
+    if (o.status !== 'paid') return sum
+    return sum + (Number(o.paid_amount) || 0)
+  }, 0)
+}
 
 function monthName(ym: string) {
   const [y, m] = ym.split('-').map(Number)
@@ -112,8 +119,9 @@ function changeYear(dir: number) {
 }
 
 function occPasses(o: YearOccurrence) {
-  if (!upcomingOnly.value) return true
-  return o.status === 'upcoming' || o.status === 'overdue'
+  if (filterMode.value === 'all') return true
+  if (filterMode.value === 'unpaid') return o.status === 'upcoming' || o.status === 'due-soon' || o.status === 'overdue'
+  return o.status === 'paid'
 }
 
 async function openEditPayment(o: YearOccurrence) {
@@ -181,10 +189,29 @@ onMounted(load)
       </div>
 
       <div style="display:flex;align-items:center;gap:10px;margin:0 0 calc(14px * var(--layout-scale-n) / var(--layout-scale-d))">
-        <button class="btn btn-ghost btn-sm" @click="upcomingOnly = !upcomingOnly">
-          {{ upcomingOnly ? 'Showing: Unpaid only' : 'Showing: All' }}
-        </button>
-        <span style="color: var(--ink-light); font-size: 1.2rem">Toggle to hide paid items.</span>
+        <div class="inline-flex rounded-lg border border-[color:var(--border)] bg-[color:var(--paper)] p-1">
+          <button
+            class="rounded-md px-3 py-1.5 text-[1.15rem] font-semibold transition-colors"
+            :class="filterMode === 'all' ? 'bg-[color:var(--accent-light)] text-[color:var(--accent-dark)]' : 'text-[color:var(--ink-light)] hover:bg-[color:var(--paper-dark)]'"
+            @click="filterMode = 'all'"
+          >
+            All bills
+          </button>
+          <button
+            class="rounded-md px-3 py-1.5 text-[1.15rem] font-semibold transition-colors"
+            :class="filterMode === 'unpaid' ? 'bg-[color:var(--accent-light)] text-[color:var(--accent-dark)]' : 'text-[color:var(--ink-light)] hover:bg-[color:var(--paper-dark)]'"
+            @click="filterMode = 'unpaid'"
+          >
+            Unpaid bills
+          </button>
+          <button
+            class="rounded-md px-3 py-1.5 text-[1.15rem] font-semibold transition-colors"
+            :class="filterMode === 'paid' ? 'bg-[color:var(--accent-light)] text-[color:var(--accent-dark)]' : 'text-[color:var(--ink-light)] hover:bg-[color:var(--paper-dark)]'"
+            @click="filterMode = 'paid'"
+          >
+            Paid bills
+          </button>
+        </div>
       </div>
 
       <div id="year-content">
@@ -196,8 +223,10 @@ onMounted(load)
             <div class="mb-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-baseline justify-between border-b-2 border-[color:var(--border)] pb-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
               <div class="font-['DM_Serif_Display'] text-[1.8rem] text-[color:var(--ink)]">{{ monthName(m.month) }}</div>
               <div class="text-[1.3rem] text-[color:var(--ink-light)]">
-                {{ m.occurrences.filter(occPasses).length }} bill{{ m.occurrences.filter(occPasses).length === 1 ? '' : 's' }} · unpaid:
-                <strong class="font-['DM_Serif_Display'] text-[1.6rem] text-[color:var(--ink)]">{{ fmtMoney(m.total_unpaid) }}</strong>
+                {{ m.occurrences.length }} bill{{ m.occurrences.length === 1 ? '' : 's' }} · unpaid:
+                <strong class="font-['DM_Serif_Display'] text-[1.6rem] text-[color:var(--amber)]">{{ fmtMoney(m.total_unpaid) }}</strong>
+                · paid:
+                <strong class="font-['DM_Serif_Display'] text-[1.6rem] text-[color:var(--green)]">{{ fmtMoney(monthPaidTotal(m)) }}</strong>
               </div>
             </div>
 
