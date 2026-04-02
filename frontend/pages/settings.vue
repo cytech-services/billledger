@@ -139,57 +139,75 @@ onMounted(async () => {
 
 <template>
   <div class="page active" id="pg-settings">
-    <div class="sec-hdr"><h2>Settings</h2></div>
-    <div v-if="settingsErr" class="none-msg">{{ settingsErr }}</div>
-    <div class="settings-wrap">
-      <div class="settings-side">
-        <button :class="{ active: tab === 'methods' }" @click="tab = 'methods'">Payment Methods</button>
-        <button :class="{ active: tab === 'backups' }" @click="tab = 'backups'">Backups</button>
+    <div class="mb-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-center justify-between">
+      <h2 class="font-['DM_Serif_Display'] text-[2rem]">Settings</h2>
+    </div>
+    <div v-if="settingsErr" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">{{ settingsErr }}</div>
+    <div class="grid grid-cols-[calc(220px*var(--layout-scale-n)/var(--layout-scale-d))_1fr] gap-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))]">
+      <div class="rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] p-[calc(12px*var(--layout-scale-n)/var(--layout-scale-d))]">
+        <button
+          class="w-full rounded-lg px-3 py-[10px] text-left text-[1.3rem] font-semibold transition-all"
+          :class="tab === 'methods' ? 'bg-[color:var(--accent-light)] text-[color:var(--accent-dark)]' : 'text-[color:var(--ink-light)] hover:bg-[color:var(--paper-dark)] hover:text-[color:var(--ink)]'"
+          @click="tab = 'methods'"
+        >Payment Methods</button>
+        <button
+          class="mt-1 w-full rounded-lg px-3 py-[10px] text-left text-[1.3rem] font-semibold transition-all"
+          :class="tab === 'backups' ? 'bg-[color:var(--accent-light)] text-[color:var(--accent-dark)]' : 'text-[color:var(--ink-light)] hover:bg-[color:var(--paper-dark)] hover:text-[color:var(--ink)]'"
+          @click="tab = 'backups'"
+        >Backups</button>
       </div>
-      <div class="settings-content">
+      <div class="rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] p-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))]">
         <div v-if="tab === 'methods'">
-          <div class="sec-title">Payment Methods</div>
-          <div class="settings-method-form">
-            <div class="fg">
+          <div class="mb-[10px] flex items-center gap-2 text-[1.1rem] font-bold uppercase tracking-[.9px] text-[color:var(--ink-light)] after:h-px after:flex-1 after:bg-[color:var(--border)]">Payment Methods</div>
+          <div class="mb-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-end gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))]">
+            <div class="flex-1">
               <label>New method</label>
               <input v-model="newMethod" placeholder="e.g. Chase Visa" @keydown.enter.prevent="addMethod()" />
             </div>
-            <button class="btn btn-primary" @click="addMethod()">Add</button>
+            <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)]" @click="addMethod()">Add</button>
           </div>
-          <div v-if="!methodsSorted.length" class="none-msg">No payment methods saved yet.</div>
-          <div v-else class="method-list">
-            <div v-for="m in methodsSorted" :key="m" class="method-row">
+          <div v-if="!methodsSorted.length" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">No payment methods saved yet.</div>
+          <div v-else class="flex flex-col gap-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
+            <div
+              v-for="m in methodsSorted"
+              :key="m"
+              class="flex items-center justify-between rounded-lg border border-[color:var(--border)] bg-[color:var(--paper)] px-[calc(12px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))]"
+            >
               <div>
-                <div class="method-name">{{ m }}</div>
-                <div class="method-meta">
+                <div class="text-[1.4rem] font-semibold text-[color:var(--ink)]">{{ m }}</div>
+                <div class="mt-[3px] text-[1.2rem] text-[color:var(--ink-light)]">
                   {{ getStats(m).bill_count }} bill{{ getStats(m).bill_count === 1 ? '' : 's' }} used ·
                   {{ fmtMoney(getStats(m).total_paid) }} total paid
                 </div>
               </div>
-              <button class="btn btn-danger btn-sm" @click="removeMethod(m)">Remove</button>
+              <button class="rounded-lg bg-[color:var(--red-light)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95" @click="removeMethod(m)">Remove</button>
             </div>
           </div>
         </div>
 
         <div v-else>
-          <div class="sec-title">Backups</div>
-          <div v-if="backupStatus" class="none-msg" style="text-align: left">
+          <div class="mb-[10px] flex items-center gap-2 text-[1.1rem] font-bold uppercase tracking-[.9px] text-[color:var(--ink-light)] after:h-px after:flex-1 after:bg-[color:var(--border)]">Backups</div>
+          <div v-if="backupStatus" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-left text-[1.3rem] italic text-[color:var(--ink-light)]">
             Retention: {{ backupStatus.retention_days }} days · Total: {{ backupStatus.total_backups }}
           </div>
-          <button class="btn btn-primary" style="margin-bottom:12px" :disabled="backingUp" @click="runManualBackup()">
+          <button class="mb-3 rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)] disabled:opacity-60" :disabled="backingUp" @click="runManualBackup()">
             <span v-if="backingUp" class="spinner"></span>
             <span v-else>Run Manual Backup</span>
           </button>
-          <div v-if="!backups.length" class="none-msg">No backups found yet.</div>
-          <div v-else class="method-list">
-            <div v-for="b in backups" :key="b.filename" class="method-row">
+          <div v-if="!backups.length" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">No backups found yet.</div>
+          <div v-else class="flex flex-col gap-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
+            <div
+              v-for="b in backups"
+              :key="b.filename"
+              class="flex items-center justify-between rounded-lg border border-[color:var(--border)] bg-[color:var(--paper)] px-[calc(12px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))]"
+            >
               <div>
-                <div class="method-name">{{ b.filename }}</div>
-                <div class="method-meta">{{ new Date(b.created_at).toLocaleString() }} · {{ b.size }} bytes</div>
+                <div class="text-[1.4rem] font-semibold text-[color:var(--ink)]">{{ b.filename }}</div>
+                <div class="mt-[3px] text-[1.2rem] text-[color:var(--ink-light)]">{{ new Date(b.created_at).toLocaleString() }} · {{ b.size }} bytes</div>
               </div>
-              <div class="backup-actions">
-                <button class="btn btn-ghost btn-sm" @click="downloadBackup(b.filename)">Download</button>
-                <button class="btn btn-danger btn-sm" @click="restoreBackup(b.filename)">Restore</button>
+              <div class="flex gap-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
+                <button class="rounded-lg border border-[color:var(--border)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" @click="downloadBackup(b.filename)">Download</button>
+                <button class="rounded-lg bg-[color:var(--red-light)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95" @click="restoreBackup(b.filename)">Restore</button>
               </div>
             </div>
           </div>

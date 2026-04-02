@@ -193,107 +193,121 @@ onUnmounted(() => {
 
 <template>
   <div class="page active">
-    <div class="sec-hdr"><h2>Payment Log</h2></div>
-    <div class="log-filters">
-      <div>
-        <label style="display:block;font-size:1.1rem;color:var(--ink-light);margin:0 0 4px 2px">Bill</label>
+    <div class="mb-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-center justify-between">
+      <h2 class="font-['DM_Serif_Display'] text-[2rem]">Payment Log</h2>
+    </div>
+    <div class="mb-4 flex flex-wrap items-end gap-3">
+      <div class="min-w-[220px]">
+        <label class="mb-1 ml-1 block text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Bill</label>
         <div ref="billPickerEl" class="msel" @keydown.esc="billPickerOpen=false">
-          <button type="button" class="msel-btn" @click="billPickerOpen = !billPickerOpen">
+          <button type="button" class="msel-btn w-full justify-between" @click="billPickerOpen = !billPickerOpen">
             {{ selectedBillsLabel }}
           </button>
           <div v-if="billPickerOpen" class="msel-pop" @click.stop>
             <div class="msel-top">
               <input v-model="billSearch" class="msel-search" placeholder="Search bills…" />
-              <button type="button" class="btn btn-ghost btn-sm" @click="clearBills()">Clear</button>
+              <button type="button" class="rounded-lg border border-[color:var(--border)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" @click="clearBills()">Clear</button>
             </div>
             <div class="msel-list">
               <label v-for="b in filteredBills" :key="b.id" class="msel-item">
                 <input type="checkbox" :checked="selectedBillIdsSet.has(b.id)" @change="toggleBill(b.id)" />
                 <span>{{ b.name }}</span>
               </label>
-              <div v-if="!filteredBills.length" class="none-msg" style="margin:8px 0 0">No matches</div>
+              <div v-if="!filteredBills.length" class="mt-2 p-0 text-center text-[1.3rem] italic text-[color:var(--ink-light)]">No matches</div>
             </div>
           </div>
         </div>
       </div>
-      <div>
-        <label style="display:block;font-size:1.1rem;color:var(--ink-light);margin:0 0 4px 2px">From</label>
+      <div class="min-w-[180px]">
+        <label class="mb-1 ml-1 block text-[1.1rem] font-semibold text-[color:var(--ink-light)]">From</label>
         <input v-model="filterFrom" type="date" @change="load()" />
       </div>
-      <div>
-        <label style="display:block;font-size:1.1rem;color:var(--ink-light);margin:0 0 4px 2px">To</label>
+      <div class="min-w-[180px]">
+        <label class="mb-1 ml-1 block text-[1.1rem] font-semibold text-[color:var(--ink-light)]">To</label>
         <input v-model="filterTo" type="date" @change="load()" />
       </div>
     </div>
 
-    <div v-if="err" class="none-msg">{{ err }}</div>
-    <div v-else-if="loading" class="none-msg">Loading…</div>
-    <div v-else-if="!payments.length" class="empty" style="display: block">
+    <div v-if="err" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">{{ err }}</div>
+    <div v-else-if="loading" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">Loading…</div>
+    <div v-else-if="!payments.length" class="empty block">
       <div class="empty-icon">📝</div>
       <h3>No payments yet</h3>
       <p>Record payments to see them here.</p>
     </div>
-    <div v-else>
-      <div class="log-totals">
-        <div class="log-total">
-          <div class="log-total-label">Total expected</div>
-          <div class="log-total-value">{{ fmtMoney(totalExpected) }}</div>
+    <div v-else class="space-y-3">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div class="rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
+          <div class="text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Total expected</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] text-[color:var(--ink)]">{{ fmtMoney(totalExpected) }}</div>
         </div>
-        <div class="log-total">
-          <div class="log-total-label">Total actual paid</div>
-          <div class="log-total-value" style="color: var(--green)">{{ fmtMoney(totalPaid) }}</div>
+        <div class="rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
+          <div class="text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Total actual paid</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] text-[color:var(--green)]">{{ fmtMoney(totalPaid) }}</div>
         </div>
       </div>
 
-      <div id="log-list">
-      <div v-for="p in payments" :key="p.id" class="lrow">
-        <div class="l-main">
-          <div class="l-top">
-            <div class="l-name l-name-link" @click="openDetail(p.bill_id)">{{ p.bill_name || 'Unknown' }}</div>
-            <div class="l-amt">
-              {{ fmtMoney(p.amount) }}<span class="l-due-amt"> ({{ fmtMoney(billAmountById.get(p.bill_id) ?? null) }})</span>
+      <div id="log-list" class="space-y-2">
+      <div v-for="p in payments" :key="p.id" class="rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-4 py-3 transition-shadow hover:shadow-[0_2px_10px_var(--shadow)]">
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(320px,1fr)_auto] md:items-start">
+          <div class="min-w-0">
+          <div class="grid grid-cols-1 items-baseline gap-2 md:grid-cols-[minmax(220px,1fr)_max-content] md:gap-3">
+            <div
+              class="min-w-0 cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap text-[1.5rem] font-[650] text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline"
+              @click="openDetail(p.bill_id)"
+            >
+              {{ p.bill_name || 'Unknown' }}
+            </div>
+            <div class="justify-self-start text-[1.2rem] whitespace-nowrap text-[color:var(--ink-light)] md:justify-self-end">
+              Expected: <span class="font-semibold text-[color:var(--ink)]">{{ fmtMoney(billAmountById.get(p.bill_id) ?? null) }}</span>
             </div>
           </div>
 
-          <div class="l-details">
-            <div class="l-kv">
-              <span class="l-k">Paid on</span>
-              <span class="l-v">{{ new Date(p.paid_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
+          <div class="mt-1 flex flex-wrap gap-x-4 gap-y-2 text-[1.2rem] leading-6 text-[color:var(--ink-light)]">
+            <div class="flex items-baseline gap-1.5">
+              <span class="rounded-full border border-[color:var(--border)] bg-[color:var(--paper-dark)] px-[7px] py-[1px] text-[1.15rem] font-bold text-[color:var(--ink)]">Paid on</span>
+              <span class="text-[color:var(--ink)]">{{ new Date(p.paid_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
             </div>
-            <div v-if="p.method" class="l-kv">
-              <span class="l-k">Method</span>
-              <span class="l-v">{{ p.method }}</span>
+            <div v-if="p.method" class="flex items-baseline gap-1.5">
+              <span class="rounded-full border border-[color:var(--border)] bg-[color:var(--paper-dark)] px-[7px] py-[1px] text-[1.15rem] font-bold text-[color:var(--ink)]">Method</span>
+              <span class="text-[color:var(--ink)]">{{ p.method }}</span>
             </div>
-            <div v-if="p.confirm_num" class="l-kv">
-              <span class="l-k">Ref</span>
-              <span class="l-v">{{ p.confirm_num }}</span>
+            <div v-if="p.confirm_num" class="flex items-baseline gap-1.5">
+              <span class="rounded-full border border-[color:var(--border)] bg-[color:var(--paper-dark)] px-[7px] py-[1px] text-[1.15rem] font-bold text-[color:var(--ink)]">Ref</span>
+              <span class="text-[color:var(--ink)]">{{ p.confirm_num }}</span>
             </div>
-            <div v-if="p.paid_by" class="l-kv">
-              <span class="l-k">Paid by</span>
-              <span class="l-v"><strong>{{ p.paid_by }}</strong></span>
+            <div v-if="p.paid_by" class="flex items-baseline gap-1.5">
+              <span class="rounded-full border border-[color:var(--border)] bg-[color:var(--paper-dark)] px-[7px] py-[1px] text-[1.15rem] font-bold text-[color:var(--ink)]">Paid by</span>
+              <span class="text-[color:var(--ink)]"><strong>{{ p.paid_by }}</strong></span>
             </div>
-            <div v-if="p.notes" class="l-kv l-notes">
-              <span class="l-k">Notes</span>
-              <span class="l-v">{{ p.notes }}</span>
+            <div v-if="p.notes" class="basis-full">
+              <span class="rounded-full border border-[color:var(--border)] bg-[color:var(--paper-dark)] px-[7px] py-[1px] text-[1.15rem] font-bold text-[color:var(--ink)]">Notes</span>
+              <span class="ml-2 text-[color:var(--ink)]">{{ p.notes }}</span>
             </div>
           </div>
         </div>
 
-        <div class="log-actions">
-          <button class="btn btn-ghost btn-sm" @click="openEdit(p)">Edit</button>
-          <button class="btn btn-danger btn-sm" @click="removePayment(p.id)">Remove</button>
+        <div class="flex flex-col gap-2 md:items-end">
+          <div class="text-right font-['DM_Serif_Display'] text-[1.8rem] whitespace-nowrap text-[color:var(--green)]">
+            {{ fmtMoney(p.amount) }}
+          </div>
+          <div class="flex gap-2 md:justify-end">
+            <button class="rounded-lg border border-[color:var(--border)] px-3 py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" @click="openEdit(p)">Edit</button>
+            <button class="rounded-lg bg-[color:var(--red-light)] px-3 py-[6px] text-[1.2rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95" @click="removePayment(p.id)">Remove</button>
+          </div>
         </div>
+      </div>
       </div>
       </div>
 
-      <div class="log-totals log-totals-bottom">
-        <div class="log-total">
-          <div class="log-total-label">Total expected</div>
-          <div class="log-total-value">{{ fmtMoney(totalExpected) }}</div>
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div class="rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
+          <div class="text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Total expected</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] text-[color:var(--ink)]">{{ fmtMoney(totalExpected) }}</div>
         </div>
-        <div class="log-total">
-          <div class="log-total-label">Total actual paid</div>
-          <div class="log-total-value" style="color: var(--green)">{{ fmtMoney(totalPaid) }}</div>
+        <div class="rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
+          <div class="text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Total actual paid</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] text-[color:var(--green)]">{{ fmtMoney(totalPaid) }}</div>
         </div>
       </div>
     </div>
@@ -301,44 +315,44 @@ onUnmounted(() => {
 
   <BillDetailModal :open="detailOpen" :bill-id="detailBillId" @close="closeDetail()" @changed="load()" />
 
-  <div class="overlay" :class="{ open: editOpen }" @click.self="closeEdit()">
-    <div class="modal">
-      <div class="modal-title">Edit Payment</div>
-      <div class="pay-info">
+  <div class="fixed inset-0 z-[200] hidden items-center justify-center bg-[rgba(26,26,46,.52)] backdrop-blur-[3px]" :class="{ '!flex': editOpen }" @click.self="closeEdit()">
+    <div class="max-h-[92vh] w-[calc(540px*var(--layout-scale-n)/var(--layout-scale-d))] max-w-[96vw] overflow-y-auto rounded-[15px] bg-[color:var(--cream)] p-[calc(30px*var(--layout-scale-n)/var(--layout-scale-d))] shadow-[0_24px_60px_rgba(0,0,0,.18)]">
+      <div class="mb-[calc(22px*var(--layout-scale-n)/var(--layout-scale-d))] font-['DM_Serif_Display'] text-[2.1rem]">Edit Payment</div>
+      <div class="mb-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] rounded-lg bg-[color:var(--paper-dark)] px-[calc(15px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(11px*var(--layout-scale-n)/var(--layout-scale-d))] text-[1.3rem] leading-[1.6]">
         <strong>{{ editing?.bill_name || 'Payment' }}</strong><br />
-        <span style="color: var(--ink-light); font-size: 1.2rem">Payment ID: {{ editing?.id }}</span>
+        <span class="text-[1.2rem] text-[color:var(--ink-light)]">Payment ID: {{ editing?.id }}</span>
       </div>
 
-      <div class="fgrid">
-        <div class="fg">
+      <div class="grid grid-cols-2 gap-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))]">
+        <div class="flex flex-col gap-[5px]">
           <label>Payment Date *</label>
           <input v-model="editPaidDate" type="date" />
         </div>
-        <div class="fg">
+        <div class="flex flex-col gap-[5px]">
           <label>Amount ($)</label>
           <input v-model="editAmount" type="number" step="0.01" placeholder="0.00" />
         </div>
-        <div class="fg full">
+        <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Paid With (method / card)</label>
           <input v-model="editMethod" placeholder="e.g. Mastercard" />
         </div>
-        <div class="fg full">
+        <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Paid By (person)</label>
           <input v-model="editPaidBy" placeholder="e.g. Tom, Sarah, Joint…" />
         </div>
-        <div class="fg">
+        <div class="flex flex-col gap-[5px]">
           <label>Confirmation #</label>
           <input v-model="editConfirmNum" placeholder="Optional" />
         </div>
-        <div class="fg full">
+        <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Notes</label>
           <textarea v-model="editNotes" placeholder="Optional" />
         </div>
       </div>
 
-      <div class="mfooter">
-        <button class="btn btn-ghost" :disabled="saving" @click="closeEdit()">Cancel</button>
-        <button class="btn btn-primary" :disabled="saving || !editPaidDate" @click="saveEdit()">
+      <div class="mt-[calc(22px*var(--layout-scale-n)/var(--layout-scale-d))] flex justify-end gap-[calc(9px*var(--layout-scale-n)/var(--layout-scale-d))] border-t border-[color:var(--border)] pt-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))]">
+        <button class="rounded-lg border border-[color:var(--border)] px-[15px] py-2 text-[1.3rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" :disabled="saving" @click="closeEdit()">Cancel</button>
+        <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)] disabled:opacity-60" :disabled="saving || !editPaidDate" @click="saveEdit()">
           <span v-if="saving" class="spinner"></span>
           <span v-else>Save Changes</span>
         </button>

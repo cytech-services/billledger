@@ -100,20 +100,20 @@ onMounted(load)
 
 <template>
   <div class="page active">
-    <div class="sec-hdr">
-      <h2>My Bills</h2>
-      <button class="btn btn-primary" @click="openAdd()">+ Add Bill</button>
+    <div class="mb-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-center justify-between">
+      <h2 class="font-['DM_Serif_Display'] text-[2rem]">My Bills</h2>
+      <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)]" @click="openAdd()">+ Add Bill</button>
     </div>
 
-    <div v-if="err" class="none-msg">{{ err }}</div>
-    <div v-else-if="loading" class="none-msg">Loading…</div>
-    <div v-else-if="!bills.length" class="empty" style="display: block">
-      <div class="empty-icon">📋</div>
-      <h3>No bills yet</h3>
-      <p>Add each of your bills once and let Bill Ledger track everything.</p>
-      <button class="btn btn-primary" @click="openAdd()">+ Add Your First Bill</button>
+    <div v-if="err" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">{{ err }}</div>
+    <div v-else-if="loading" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">Loading…</div>
+    <div v-else-if="!bills.length" class="block px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(50px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[color:var(--ink-light)]">
+      <div class="mb-[14px] text-[4.4rem]">📋</div>
+      <h3 class="mb-[7px] font-['DM_Serif_Display'] text-[1.9rem] text-[color:var(--ink)]">No bills yet</h3>
+      <p class="mb-[18px] text-[1.3rem]">Add each of your bills once and let Bill Ledger track everything.</p>
+      <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)]" @click="openAdd()">+ Add Your First Bill</button>
     </div>
-    <div v-else class="tbl-wrap">
+    <div v-else class="overflow-x-auto">
       <table>
         <thead>
           <tr>
@@ -130,20 +130,20 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="b in bills" :key="b.id">
-            <td><strong class="b-name" style="cursor: pointer">{{ b.name }}</strong></td>
-            <td class="td-muted">{{ b.company || '—' }}</td>
+            <td><strong class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline">{{ b.name }}</strong></td>
+            <td class="text-[color:var(--ink-light)]">{{ b.company || '—' }}</td>
             <td>{{ b.frequency }}</td>
-            <td class="td-muted">{{ dueText(b) }}</td>
+            <td class="text-[color:var(--ink-light)]">{{ dueText(b) }}</td>
             <td>{{ b.amount != null ? '$' + Number(b.amount).toFixed(2) : '—' }}</td>
             <td>{{ b.autopay === 'Yes' ? '✅ Yes' : 'No' }}</td>
-            <td class="td-muted">{{ b.method || '—' }}</td>
-            <td class="td-muted" style="max-width: calc(140px * var(--layout-scale-n) / var(--layout-scale-d)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+            <td class="text-[color:var(--ink-light)]">{{ b.method || '—' }}</td>
+            <td class="max-w-[calc(140px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden text-ellipsis whitespace-nowrap text-[color:var(--ink-light)]">
               {{ b.notes || '—' }}
             </td>
             <td>
-              <div class="td-actions">
-                <button class="btn btn-ghost btn-sm" @click="openEdit(b)">Edit</button>
-                <button class="btn btn-danger btn-sm" @click="deleteBill(b.id)">Delete</button>
+              <div class="flex gap-[calc(7px*var(--layout-scale-n)/var(--layout-scale-d))]">
+                <button class="rounded-lg border border-[color:var(--border)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" @click="openEdit(b)">Edit</button>
+                <button class="rounded-lg bg-[color:var(--red-light)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95" @click="deleteBill(b.id)">Delete</button>
               </div>
             </td>
           </tr>

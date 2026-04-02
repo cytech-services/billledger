@@ -2,11 +2,9 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  modules: ['@nuxtjs/tailwindcss'],
   css: [
-    '~/assets/css/tokens.css',
-    '~/assets/css/base.css',
-    '~/assets/css/components.css',
-    '~/assets/css/pages.css',
+    '~/assets/css/tailwind.css'
   ],
   runtimeConfig: {
     public: {

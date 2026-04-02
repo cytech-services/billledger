@@ -113,11 +113,15 @@ async function afterEditSaved() {
 </script>
 
 <template>
-  <div class="overlay" :class="{ open }" @click.self="emit('close')">
-    <div class="modal detail-modal">
-      <div v-if="loading" class="none-msg">Loading…</div>
-      <div v-else-if="err" class="none-msg">{{ err }}</div>
-      <div v-else-if="!details" class="none-msg">No details.</div>
+  <div
+    class="fixed inset-0 z-[200] hidden items-center justify-center bg-[rgba(26,26,46,.52)] backdrop-blur-[3px]"
+    :class="{ '!flex': open }"
+    @click.self="emit('close')"
+  >
+    <div class="max-h-[92vh] w-[calc(700px*var(--layout-scale-n)/var(--layout-scale-d))] max-w-[96vw] overflow-y-auto rounded-[15px] bg-[color:var(--cream)] p-[calc(30px*var(--layout-scale-n)/var(--layout-scale-d))] shadow-[0_24px_60px_rgba(0,0,0,.18)]">
+      <div v-if="loading" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">Loading…</div>
+      <div v-else-if="err" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">{{ err }}</div>
+      <div v-else-if="!details" class="p-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] text-center text-[1.3rem] italic text-[color:var(--ink-light)]">No details.</div>
       <div v-else>
         <div class="detail-header" id="detail-header">
           <div class="detail-bill-name">{{ details.bill.name }}</div>
@@ -168,9 +172,9 @@ async function afterEditSaved() {
           </div>
         </div>
 
-        <div class="mfooter">
-          <button class="btn btn-ghost" @click="emit('close')">Close</button>
-          <button class="btn btn-primary" @click="openEdit()">Edit Bill</button>
+        <div class="mt-[calc(22px*var(--layout-scale-n)/var(--layout-scale-d))] flex justify-end gap-[calc(9px*var(--layout-scale-n)/var(--layout-scale-d))] border-t border-[color:var(--border)] pt-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <button class="rounded-lg border border-[color:var(--border)] px-[15px] py-2 text-[1.3rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" @click="emit('close')">Close</button>
+          <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)]" @click="openEdit()">Edit Bill</button>
         </div>
       </div>
     </div>

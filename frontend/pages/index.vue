@@ -289,116 +289,156 @@ onMounted(loadDashboard)
   <div class="page active">
     <div v-if="err" class="none-msg">{{ err }}</div>
     <div v-else>
-      <div class="cards">
-        <div class="card red"><div class="card-label">Overdue</div><div class="card-value">{{ overdueBills.length }}</div></div>
-        <div class="card amber"><div class="card-label">Due Within 15 Days</div><div class="card-value">{{ soonBills.length }}</div></div>
-        <div class="card purple"><div class="card-label">Due This Month</div><div class="card-value">{{ dueThisMonthBills.length }}</div></div>
-        <div class="card green"><div class="card-label">Paid This Month</div><div class="card-value">{{ paidThisMonthPayments.length }}</div></div>
+      <div class="mb-[calc(28px*var(--layout-scale-n)/var(--layout-scale-d))] grid grid-cols-1 gap-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] md:grid-cols-2 xl:grid-cols-4">
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--red)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Overdue</div>
+          <div class="font-['DM_Serif_Display'] text-[2.6rem] leading-none text-[color:var(--red)]">{{ overdueBills.length }}</div>
+        </div>
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--amber)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Due Within 15 Days</div>
+          <div class="font-['DM_Serif_Display'] text-[2.6rem] leading-none text-[color:var(--amber)]">{{ soonBills.length }}</div>
+        </div>
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--purple)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Due This Month</div>
+          <div class="font-['DM_Serif_Display'] text-[2.6rem] leading-none text-[color:var(--purple)]">{{ dueThisMonthBills.length }}</div>
+        </div>
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--green)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Paid This Month</div>
+          <div class="font-['DM_Serif_Display'] text-[2.6rem] leading-none text-[color:var(--green)]">{{ paidThisMonthPayments.length }}</div>
+        </div>
 
-        <div class="card red"><div class="card-label">Amount Overdue</div><div class="card-value" style="font-size:2rem">{{ fmtMoney(amtOverdue) }}</div></div>
-        <div class="card amber"><div class="card-label">Amount Due Within 15 Days</div><div class="card-value" style="font-size:2rem">{{ fmtMoney(amtSoon) }}</div></div>
-        <div class="card purple"><div class="card-label">Amount Due This Month</div><div class="card-value" style="font-size:2rem">{{ fmtMoney(amtDueThisMonth) }}</div></div>
-        <div class="card green"><div class="card-label">Amount Paid This Month</div><div class="card-value" style="font-size:2rem">{{ fmtMoney(amtPaidThisMonth) }}</div></div>
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--red)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Amount Overdue</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--red)]">{{ fmtMoney(amtOverdue) }}</div>
+        </div>
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--amber)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Amount Due Within 15 Days</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--amber)]">{{ fmtMoney(amtSoon) }}</div>
+        </div>
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--purple)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Amount Due This Month</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--purple)]">{{ fmtMoney(amtDueThisMonth) }}</div>
+        </div>
+        <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--green)]">
+          <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Amount Paid This Month</div>
+          <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--green)]">{{ fmtMoney(amtPaidThisMonth) }}</div>
+        </div>
       </div>
 
       <div v-if="loading" class="none-msg">Loading…</div>
       <div v-else>
-        <div class="sec">
-          <div class="sec-title">⚠ Overdue</div>
-          <div class="bill-list">
+        <section class="mb-[calc(28px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <div class="mb-[10px] flex items-center gap-2 text-[1.1rem] font-bold uppercase tracking-[.9px] text-[color:var(--ink-light)] after:h-px after:flex-1 after:bg-[color:var(--border)]">⚠ Overdue</div>
+          <div class="flex flex-col gap-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
             <div v-if="!overdueBills.length" class="none-msg">No overdue bills 🎉</div>
-            <div v-for="b in overdueBills" :key="b.id" class="brow overdue">
+            <div
+              v-for="b in overdueBills"
+              :key="b.id"
+              class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--red)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
+            >
               <div>
-                <div class="b-name" @click="openDetail(b.id)">{{ b.name }}</div>
-                <div class="b-co">{{ b.company || '' }}</div>
-                <span class="b-freq">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="autopay-tag">AUTO-PAY</span>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
+                <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="b-due">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
-                <div class="b-days">{{ daysLabelForBill(b, 'overdue') }}</div>
+                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="mt-[2px] text-[1.1rem] text-[color:var(--ink-light)]">{{ daysLabelForBill(b, 'overdue') }}</div>
               </div>
-              <div class="b-amt-wrap">
-                <div class="b-amt">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
+              <div class="flex flex-col items-end gap-[3px]">
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
               </div>
               <div></div>
-              <div><span class="badge overdue">⚠ Overdue</span></div>
+              <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--red-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--red)]">⚠ Overdue</span></div>
               <button class="btn btn-pay btn-sm" @click="openPay(b.id)">Mark Paid</button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="sec">
-          <div class="sec-title">⏰ Due Within 15 Days</div>
-          <div class="bill-list">
+        <section class="mb-[calc(28px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <div class="mb-[10px] flex items-center gap-2 text-[1.1rem] font-bold uppercase tracking-[.9px] text-[color:var(--ink-light)] after:h-px after:flex-1 after:bg-[color:var(--border)]">⏰ Due Within 15 Days</div>
+          <div class="flex flex-col gap-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
             <div v-if="!soonBills.length" class="none-msg">Nothing due in the next 15 days</div>
-            <div v-for="b in soonBills" :key="b.id" class="brow due-soon">
+            <div
+              v-for="b in soonBills"
+              :key="b.id"
+              class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--amber)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
+            >
               <div>
-                <div class="b-name" @click="openDetail(b.id)">{{ b.name }}</div>
-                <div class="b-co">{{ b.company || '' }}</div>
-                <span class="b-freq">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="autopay-tag">AUTO-PAY</span>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
+                <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="b-due">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
-                <div class="b-days">{{ daysLabelForBill(b, 'due-soon') }}</div>
+                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="mt-[2px] text-[1.1rem] text-[color:var(--ink-light)]">{{ daysLabelForBill(b, 'due-soon') }}</div>
               </div>
-              <div class="b-amt-wrap">
-                <div class="b-amt">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
+              <div class="flex flex-col items-end gap-[3px]">
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
               </div>
               <div></div>
-              <div><span class="badge due-soon">⏰ Due Soon</span></div>
+              <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--amber-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--amber)]">⏰ Due Soon</span></div>
               <button class="btn btn-pay btn-sm" @click="openPay(b.id)">Mark Paid</button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="sec">
-          <div class="sec-title">📅 Upcoming</div>
-          <div class="bill-list">
+        <section class="mb-[calc(28px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <div class="mb-[10px] flex items-center gap-2 text-[1.1rem] font-bold uppercase tracking-[.9px] text-[color:var(--ink-light)] after:h-px after:flex-1 after:bg-[color:var(--border)]">📅 Upcoming</div>
+          <div class="flex flex-col gap-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
             <div v-if="!upcomingBills.length" class="none-msg">No upcoming bills</div>
-            <div v-for="b in upcomingBills" :key="b.id" class="brow upcoming">
+            <div
+              v-for="b in upcomingBills"
+              :key="b.id"
+              class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--blue)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
+            >
               <div>
-                <div class="b-name" @click="openDetail(b.id)">{{ b.name }}</div>
-                <div class="b-co">{{ b.company || '' }}</div>
-                <span class="b-freq">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="autopay-tag">AUTO-PAY</span>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
+                <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="b-due">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
-                <div class="b-days">{{ daysLabelForBill(b, 'upcoming') }}</div>
+                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="mt-[2px] text-[1.1rem] text-[color:var(--ink-light)]">{{ daysLabelForBill(b, 'upcoming') }}</div>
               </div>
-              <div class="b-amt-wrap">
-                <div class="b-amt">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
+              <div class="flex flex-col items-end gap-[3px]">
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
               </div>
               <div></div>
-              <div><span class="badge upcoming">📅 Upcoming</span></div>
+              <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--blue-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--blue)]">📅 Upcoming</span></div>
               <button class="btn btn-pay btn-sm" @click="openPay(b.id)">Mark Paid</button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="sec">
-          <div class="sec-title">✅ Paid This Month</div>
-          <div class="bill-list">
+        <section class="mb-[calc(28px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <div class="mb-[10px] flex items-center gap-2 text-[1.1rem] font-bold uppercase tracking-[.9px] text-[color:var(--ink-light)] after:h-px after:flex-1 after:bg-[color:var(--border)]">✅ Paid This Month</div>
+          <div class="flex flex-col gap-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
             <div v-if="!paidBills.length" class="none-msg">No payments recorded this month</div>
-            <div v-for="b in paidBills" :key="b.id" class="brow paid">
+            <div
+              v-for="b in paidBills"
+              :key="b.id"
+              class="relative grid grid-cols-[minmax(240px,1.8fr)_130px_110px_72px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))] opacity-[.82] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:bg-[color:var(--green)] hover:-translate-y-[1px] hover:shadow-[0_4px_18px_var(--shadow)]"
+            >
               <div>
-                <div class="b-name" @click="openDetail(b.id)">{{ b.name }}</div>
-                <div class="b-co">{{ b.company || '' }}</div>
-                <span class="b-freq">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="autopay-tag">AUTO-PAY</span>
+                <div class="cursor-pointer text-[1.4rem] font-semibold text-[color:var(--ink)] hover:text-[color:var(--accent)] hover:underline" @click="openDetail(b.id)">{{ b.name }}</div>
+                <div class="mt-[1px] text-[1.2rem] text-[color:var(--ink-light)]">{{ b.company || '' }}</div>
+                <span class="mt-1 inline-block rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold tracking-[.4px] text-[color:var(--ink-light)]">{{ b.frequency }}</span><span v-if="b.autopay === 'Yes'" class="ml-1 inline-block rounded-[20px] bg-[color:var(--blue-light)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--blue)]">AUTO-PAY</span>
               </div>
               <div>
-                <div class="b-due">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
-                <div class="b-days">{{ daysLabelForBill(b, 'paid') }}</div>
+                <div class="text-[1.3rem] font-medium">{{ calcNextDue(b) ? fmtDate(calcNextDue(b)!) : '—' }}</div>
+                <div class="mt-[2px] text-[1.1rem] text-[color:var(--green-dark)]">{{ daysLabelForBill(b, 'paid') }}</div>
               </div>
-              <div class="b-amt-wrap">
-                <div class="b-amt">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
-                <div v-if="paidAmountForBill(b.id) != null" class="b-paid-amt">{{ fmtMoney(paidAmountForBill(b.id) as any) }}</div>
+              <div class="flex flex-col items-end gap-[3px]">
+                <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.amount != null ? fmtMoney(b.amount) : '—' }}</div>
+                <div v-if="paidAmountForBill(b.id) != null" class="text-[1.1rem] leading-none text-[color:var(--green)]">{{ fmtMoney(paidAmountForBill(b.id) as any) }}</div>
               </div>
               <div></div>
-              <div><span class="badge paid">✅ Paid</span></div>
+              <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--green-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--green)]">✅ Paid</span></div>
               <button class="btn btn-undo btn-sm" @click="undoLatestPayment(b.id)">Undo</button>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   </div>

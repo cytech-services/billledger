@@ -108,11 +108,11 @@ onMounted(load)
 
 <template>
   <div class="page active">
-    <div class="year-nav">
-      <button class="year-nav-btn" @click="changeYear(-1)">←</button>
-      <div class="year-display">{{ currentYear }}</div>
-      <button class="year-nav-btn" @click="changeYear(1)">→</button>
-      <span style="color: var(--ink-light); font-size: 1.3rem; margin-left: 8px">All scheduled payments for the year</span>
+    <div class="mb-[calc(24px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-center gap-[calc(16px*var(--layout-scale-n)/var(--layout-scale-d))]">
+      <button class="cursor-pointer rounded-lg border border-[color:var(--border)] bg-transparent px-[14px] py-[7px] text-[1.8rem] text-[color:var(--ink-light)] transition-all hover:bg-[color:var(--paper-dark)] hover:text-[color:var(--ink)]" @click="changeYear(-1)">←</button>
+      <div class="min-w-[80px] text-center font-['DM_Serif_Display'] text-[2.8rem] text-[color:var(--ink)]">{{ currentYear }}</div>
+      <button class="cursor-pointer rounded-lg border border-[color:var(--border)] bg-transparent px-[14px] py-[7px] text-[1.8rem] text-[color:var(--ink-light)] transition-all hover:bg-[color:var(--paper-dark)] hover:text-[color:var(--ink)]" @click="changeYear(1)">→</button>
+      <span class="ml-2 text-[1.3rem] text-[color:var(--ink-light)]">All scheduled payments for the year</span>
     </div>
 
     <div v-if="err" class="none-msg">{{ err }}</div>
@@ -120,27 +120,33 @@ onMounted(load)
       Loading…
     </div>
     <div v-else>
-      <div class="year-cards" id="year-summary">
-        <div v-if="overdueCount > 0" class="year-cards-top">
-          <div class="card red"><div class="card-label">Overdue</div><div class="card-value">{{ overdueCount }}</div></div>
-          <div class="card red">
-            <div class="card-label">Amount Overdue</div>
-            <div class="card-value" style="font-size: 2rem">{{ fmtMoney(overdueAmount) }}</div>
+      <div id="year-summary" class="mb-[calc(28px*var(--layout-scale-n)/var(--layout-scale-d))] flex flex-col gap-[calc(12px*var(--layout-scale-n)/var(--layout-scale-d))]">
+        <div v-if="overdueCount > 0" class="grid grid-cols-1 gap-[calc(12px*var(--layout-scale-n)/var(--layout-scale-d))] md:grid-cols-2">
+          <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--red)]">
+            <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Overdue</div>
+            <div class="font-['DM_Serif_Display'] text-[2.6rem] leading-none text-[color:var(--red)]">{{ overdueCount }}</div>
+          </div>
+          <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--red)]">
+            <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Amount Overdue</div>
+            <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--red)]">{{ fmtMoney(overdueAmount) }}</div>
           </div>
         </div>
-        <div class="year-cards-main">
-          <div class="card blue"><div class="card-label">Total Bills</div><div class="card-value">{{ data.count }}</div></div>
-          <div class="card purple">
-            <div class="card-label">Total Scheduled</div>
-            <div class="card-value" style="font-size: 2rem">{{ fmtMoney(data.year_total) }}</div>
+        <div class="grid grid-cols-1 gap-[calc(12px*var(--layout-scale-n)/var(--layout-scale-d))] md:grid-cols-2 xl:grid-cols-4">
+          <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--blue)]">
+            <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Total Bills</div>
+            <div class="font-['DM_Serif_Display'] text-[2.6rem] leading-none text-[color:var(--blue)]">{{ data.count }}</div>
           </div>
-          <div class="card amber">
-            <div class="card-label">Unpaid / Upcoming</div>
-            <div class="card-value" style="font-size: 2rem">{{ fmtMoney(data.year_unpaid) }}</div>
+          <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--purple)]">
+            <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Total Scheduled</div>
+            <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--purple)]">{{ fmtMoney(data.year_total) }}</div>
           </div>
-          <div class="card green">
-            <div class="card-label">Already Paid</div>
-            <div class="card-value" style="font-size: 2rem">{{ fmtMoney(data.year_paid_total) }}</div>
+          <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--amber)]">
+            <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Unpaid / Upcoming</div>
+            <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--amber)]">{{ fmtMoney(data.year_unpaid) }}</div>
+          </div>
+          <div class="relative overflow-hidden rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(20px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))] before:absolute before:left-0 before:right-0 before:top-0 before:h-[3px] before:bg-[color:var(--green)]">
+            <div class="mb-[7px] text-[1.1rem] font-semibold uppercase tracking-[.7px] text-[color:var(--ink-light)]">Already Paid</div>
+            <div class="font-['DM_Serif_Display'] text-[2rem] leading-none text-[color:var(--green)]">{{ fmtMoney(data.year_paid_total) }}</div>
           </div>
         </div>
       </div>
@@ -157,30 +163,50 @@ onMounted(load)
           No bills scheduled for this year.
         </div>
         <div v-else>
-          <div v-for="m in data.months" :key="m.month" class="month-section">
-            <div class="month-header">
-              <div class="month-name">{{ monthName(m.month) }}</div>
-              <div class="month-total">
+          <div v-for="m in data.months" :key="m.month" class="mb-[calc(24px*var(--layout-scale-n)/var(--layout-scale-d))]">
+            <div class="mb-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] flex items-baseline justify-between border-b-2 border-[color:var(--border)] pb-[calc(8px*var(--layout-scale-n)/var(--layout-scale-d))]">
+              <div class="font-['DM_Serif_Display'] text-[1.8rem] text-[color:var(--ink)]">{{ monthName(m.month) }}</div>
+              <div class="text-[1.3rem] text-[color:var(--ink-light)]">
                 {{ m.occurrences.filter(occPasses).length }} bill{{ m.occurrences.filter(occPasses).length === 1 ? '' : 's' }} · unpaid:
-                <strong>{{ fmtMoney(m.total_unpaid) }}</strong>
+                <strong class="font-['DM_Serif_Display'] text-[1.6rem] text-[color:var(--ink)]">{{ fmtMoney(m.total_unpaid) }}</strong>
               </div>
             </div>
 
-            <div v-for="o in m.occurrences.filter(occPasses)" :key="`${o.bill_id}:${o.due_date}`" class="yrow" :class="o.status">
-              <div class="y-date">{{ new Date(o.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}</div>
+            <div
+              v-for="o in m.occurrences.filter(occPasses)"
+              :key="`${o.bill_id}:${o.due_date}`"
+              class="relative mb-[calc(6px*var(--layout-scale-n)/var(--layout-scale-d))] grid grid-cols-[130px_minmax(240px,1.7fr)_110px_92px_130px_120px] items-center gap-[calc(10px*var(--layout-scale-n)/var(--layout-scale-d))] overflow-hidden rounded-[9px] border border-[color:var(--border)] bg-[color:var(--cream)] px-[calc(16px*var(--layout-scale-n)/var(--layout-scale-d))] py-[calc(11px*var(--layout-scale-n)/var(--layout-scale-d))] hover:shadow-[0_3px_14px_var(--shadow)]"
+              :class="{
+                'before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[color:var(--red)]': o.status === 'overdue',
+                'before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[color:var(--amber)]': o.status === 'due-soon',
+                'before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[color:var(--blue)]': o.status === 'upcoming',
+                'before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[color:var(--green)] opacity-80': o.status === 'paid',
+              }"
+            >
+              <div class="text-[1.2rem] font-semibold text-[color:var(--ink-light)]">{{ new Date(o.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}</div>
               <div>
-                <div class="y-name" @click="openDetail(o.bill_id)">{{ o.bill_name }}</div>
-                <div class="y-co">{{ o.company }}{{ o.autopay === 'Yes' ? ' · AUTO-PAY' : '' }}</div>
+                <div class="cursor-pointer text-[1.3rem] font-semibold hover:text-[color:var(--accent)] hover:underline" @click="openDetail(o.bill_id)">{{ o.bill_name }}</div>
+                <div class="text-[1.1rem] text-[color:var(--ink-light)]">{{ o.company }}{{ o.autopay === 'Yes' ? ' · AUTO-PAY' : '' }}</div>
                 <span v-if="o.status === 'paid' && o.paid_date" style="font-size: 1.1rem; color: var(--green)">
                   Paid {{ new Date(o.paid_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}
                 </span>
               </div>
-              <div class="y-amt-wrap">
-                <div class="y-amt">{{ fmtMoney(o.amount) }}</div>
-                <div v-if="o.status === 'paid' && o.paid_amount != null" class="y-paid-amt">{{ fmtMoney(o.paid_amount) }}</div>
+              <div class="flex flex-col items-end gap-[3px]">
+                <div class="text-right font-['DM_Serif_Display'] text-[1.5rem]">{{ fmtMoney(o.amount) }}</div>
+                <div v-if="o.status === 'paid' && o.paid_amount != null" class="text-[1.1rem] leading-none text-[color:var(--green)]">{{ fmtMoney(o.paid_amount) }}</div>
               </div>
-              <div><span class="y-freq">{{ o.frequency }}</span></div>
-              <div><span class="badge" :class="o.status">{{ o.status }}</span></div>
+              <div><span class="rounded-[20px] bg-[color:var(--paper-dark)] px-[7px] py-[2px] text-[1rem] font-bold text-[color:var(--ink-light)]">{{ o.frequency }}</span></div>
+              <div>
+                <span
+                  class="rounded-[20px] px-[9px] py-1 text-[1.1rem] font-semibold capitalize"
+                  :class="{
+                    'bg-[color:var(--red-light)] text-[color:var(--red)]': o.status === 'overdue',
+                    'bg-[color:var(--amber-light)] text-[color:var(--amber)]': o.status === 'due-soon',
+                    'bg-[color:var(--blue-light)] text-[color:var(--blue)]': o.status === 'upcoming',
+                    'bg-[color:var(--green-light)] text-[color:var(--green)]': o.status === 'paid',
+                  }"
+                >{{ o.status }}</span>
+              </div>
               <div>
                 <button
                   v-if="o.status === 'overdue' || o.status === 'upcoming'"

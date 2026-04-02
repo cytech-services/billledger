@@ -137,20 +137,24 @@ async function save() {
 </script>
 
 <template>
-  <div class="overlay" :class="{ open }" @click.self="emit('close')">
-    <div class="modal">
-      <div class="modal-title">{{ title }}</div>
+  <div
+    class="fixed inset-0 z-[200] hidden items-center justify-center bg-[rgba(26,26,46,.52)] backdrop-blur-[3px]"
+    :class="{ '!flex': open }"
+    @click.self="emit('close')"
+  >
+    <div class="max-h-[92vh] w-[calc(540px*var(--layout-scale-n)/var(--layout-scale-d))] max-w-[96vw] overflow-y-auto rounded-[15px] bg-[color:var(--cream)] p-[calc(30px*var(--layout-scale-n)/var(--layout-scale-d))] shadow-[0_24px_60px_rgba(0,0,0,.18)]">
+      <div class="mb-[calc(22px*var(--layout-scale-n)/var(--layout-scale-d))] font-['DM_Serif_Display'] text-[2.1rem]">{{ title }}</div>
 
-      <div class="fgrid">
-        <div class="fg full">
+      <div class="grid grid-cols-2 gap-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))]">
+        <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Bill Name *</label>
           <input v-model="name" placeholder="e.g. Rent" />
         </div>
-        <div class="fg">
+        <div class="flex flex-col gap-[5px]">
           <label>Company</label>
           <input v-model="company" placeholder="Optional" />
         </div>
-        <div class="fg">
+        <div class="flex flex-col gap-[5px]">
           <label>Frequency *</label>
           <select v-model="frequency">
             <option value="">Select…</option>
@@ -166,56 +170,56 @@ async function save() {
           </select>
         </div>
 
-        <div v-if="showDayField" class="fg">
+        <div v-if="showDayField" class="flex flex-col gap-[5px]">
           <label>{{ dayLabel }}</label>
           <input v-model="dueDayOrNextDate" :type="needsDate ? 'date' : 'number'" :placeholder="needsDate ? '' : 'e.g. 15'" />
-          <div v-if="frequency === 'Estimated Tax (US/NY)'" class="hint" style="display:block">
+          <div v-if="frequency === 'Estimated Tax (US/NY)'" class="mt-[3px] rounded-md bg-[color:var(--paper-dark)] px-[10px] py-[7px] text-[1.1rem] leading-[1.5] text-[color:var(--ink-light)]">
             Due dates are fixed to Jan 15, Apr 15, Jun 15, and Sep 15 each year.
           </div>
         </div>
 
-        <div v-if="showCustomDates" class="custom-dates-section visible">
-          <label style="display:block;margin-bottom:10px">Custom Due Dates *</label>
+        <div v-if="showCustomDates" class="col-span-2 rounded-[9px] border border-[color:var(--border)] bg-[color:var(--paper)] p-[calc(14px*var(--layout-scale-n)/var(--layout-scale-d))]">
+          <label class="mb-[10px] block">Custom Due Dates *</label>
           <div id="custom-dates-list">
-            <div v-for="(d,i) in customDates" :key="i" class="custom-date-row">
+            <div v-for="(d,i) in customDates" :key="i" class="mb-2 flex items-center gap-2">
               <input type="date" :value="d" @change="customDates[i] = ($event.target as HTMLInputElement).value" />
-              <button type="button" class="btn btn-danger btn-sm" @click="removeCustomDate(i)">✕</button>
+              <button type="button" class="rounded-lg bg-[color:var(--red-light)] px-[11px] py-[6px] text-[1.2rem] font-semibold text-[color:var(--red)] transition-all hover:brightness-95" @click="removeCustomDate(i)">✕</button>
             </div>
           </div>
-          <button type="button" class="cd-add-btn" @click="addCustomDate()">+ Add Date</button>
-          <div class="hint" style="display:block;margin-top:10px">
+          <button type="button" class="mt-1 inline-flex w-auto items-center gap-[5px] rounded-[7px] border border-dashed border-[color:var(--accent)] px-3 py-1.5 text-[1.2rem] font-semibold text-[color:var(--accent)] transition-all hover:bg-[color:var(--accent-light)]" @click="addCustomDate()">+ Add Date</button>
+          <div class="mt-[10px] rounded-md bg-[color:var(--paper-dark)] px-[10px] py-[7px] text-[1.1rem] leading-[1.5] text-[color:var(--ink-light)]">
             Add each specific date this bill is due. You can add as many dates as needed.
           </div>
         </div>
 
-        <div class="fg">
+        <div class="flex flex-col gap-[5px]">
           <label>Amount ($)</label>
           <input v-model="amount" type="number" step="0.01" placeholder="0.00" />
         </div>
-        <div class="fg">
+        <div class="flex flex-col gap-[5px]">
           <label>Auto-Pay?</label>
           <select v-model="autopay">
             <option value="No">No</option>
             <option value="Yes">Yes</option>
           </select>
         </div>
-        <div class="fg full">
+        <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Usual Payment Method</label>
           <input v-model="method" placeholder="e.g. Mastercard" />
         </div>
-        <div class="fg">
+        <div class="flex flex-col gap-[5px]">
           <label>Account / Ref #</label>
           <input v-model="account" placeholder="Optional" />
         </div>
-        <div class="fg full">
+        <div class="col-span-2 flex flex-col gap-[5px]">
           <label>Notes / Reminders</label>
           <textarea v-model="notes" placeholder="Optional" />
         </div>
       </div>
 
-      <div class="mfooter">
-        <button class="btn btn-ghost" :disabled="saving" @click="emit('close')">Cancel</button>
-        <button class="btn btn-primary" :disabled="saving || !name.trim() || !frequency" @click="save()">
+      <div class="mt-[calc(22px*var(--layout-scale-n)/var(--layout-scale-d))] flex justify-end gap-[calc(9px*var(--layout-scale-n)/var(--layout-scale-d))] border-t border-[color:var(--border)] pt-[calc(18px*var(--layout-scale-n)/var(--layout-scale-d))]">
+        <button class="rounded-lg border border-[color:var(--border)] px-[15px] py-2 text-[1.3rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)]" :disabled="saving" @click="emit('close')">Cancel</button>
+        <button class="rounded-lg bg-[color:var(--accent)] px-[15px] py-2 text-[1.3rem] font-semibold text-white transition-colors hover:bg-[color:var(--accent-dark)] disabled:opacity-60" :disabled="saving || !name.trim() || !frequency" @click="save()">
           <span v-if="saving" class="spinner"></span>
           <span v-else>Save Bill</span>
         </button>
