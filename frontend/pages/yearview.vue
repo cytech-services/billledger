@@ -3,9 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
+import { useConfirm } from '~/composables/useConfirm'
 
 type YearOccurrence = {
   occurrence_id?: number
+  payment_id?: number | null
   bill_id: number
   bill_name: string
   company: string
@@ -36,6 +38,7 @@ type YearView = {
 }
 
 const api = useApi()
+const { confirm } = useConfirm()
 const currentYear = ref(new Date().getFullYear())
 const data = ref<YearView | null>(null)
 const loading = ref(false)
@@ -103,6 +106,24 @@ function changeYear(dir: number) {
 function occPasses(o: YearOccurrence) {
   if (!upcomingOnly.value) return true
   return o.status === 'upcoming' || o.status === 'overdue'
+}
+
+async function undoPayment(o: YearOccurrence) {
+  if (!o.payment_id) return
+  const ok = await confirm({
+    title: 'Remove payment?',
+    message: 'Remove the recorded payment for this occurrence?',
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
+  if (!ok) return
+  try {
+    await api.del(`/api/payments/${o.payment_id}`)
+    await load()
+  } catch (e: any) {
+    err.value = e?.message || 'Unable to remove payment'
+  }
 }
 
 onMounted(load)
@@ -216,6 +237,13 @@ onMounted(load)
                   @click="openPay(o.bill_id, o.occurrence_id)"
                 >
                   Mark Paid
+                </button>
+                <button
+                  v-else-if="o.status === 'paid'"
+                  class="btn btn-undo btn-sm"
+                  @click="undoPayment(o)"
+                >
+                  Undo
                 </button>
               </div>
             </div>

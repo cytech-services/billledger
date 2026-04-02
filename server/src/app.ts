@@ -1183,6 +1183,7 @@ app.get('/api/year-view', (req, res) => {
       }
       return {
         occurrence_id: occ.occurrence_id,
+        payment_id: occ.payment_id ?? null,
         bill_id: occ.bill_id,
         bill_name: occ.bill_name,
         company: occ.company,
