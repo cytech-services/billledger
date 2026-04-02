@@ -568,19 +568,48 @@ app.get('/api/bills/:id/details', (req, res) => {
 });
 
 app.get('/api/payments', (req, res) => {
-  const { bill_id: billId, month } = req.query;
+  const { bill_id: billIdRaw, month, from, to } = req.query;
   let sql =
     'SELECT p.*, b.name AS bill_name FROM payments p JOIN bills b ON p.bill_id = b.id WHERE 1 = 1';
   const args = [];
 
-  if (billId) {
-    sql += ' AND p.bill_id = ?';
-    args.push(billId);
+  if (billIdRaw != null && String(billIdRaw).trim()) {
+    const ids = String(billIdRaw)
+      .split(',')
+      .map((s) => Number(String(s).trim()))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (ids.length === 1) {
+      sql += ' AND p.bill_id = ?';
+      args.push(ids[0]);
+    } else if (ids.length > 1) {
+      sql += ` AND p.bill_id IN (${ids.map(() => '?').join(',')})`;
+      args.push(...ids);
+    }
   }
 
   if (month) {
     sql += " AND strftime('%Y-%m', p.paid_date) = ?";
     args.push(month);
+  }
+
+  if (from) {
+    const fromStr = String(from).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromStr)) {
+      res.status(400).json({ error: 'Invalid from date. Expected YYYY-MM-DD.' });
+      return;
+    }
+    sql += ' AND p.paid_date >= ?';
+    args.push(fromStr);
+  }
+
+  const toStr = to != null && String(to).trim() ? String(to).trim() : formatDate(startOfDay(new Date()));
+  if (toStr) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(toStr)) {
+      res.status(400).json({ error: 'Invalid to date. Expected YYYY-MM-DD.' });
+      return;
+    }
+    sql += ' AND p.paid_date <= ?';
+    args.push(toStr);
   }
 
   sql += ' ORDER BY p.paid_date DESC';

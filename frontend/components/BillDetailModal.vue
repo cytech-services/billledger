@@ -1,0 +1,181 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useApi } from '~/composables/useApi'
+import BillModal from '~/components/BillModal.vue'
+
+type Bill = {
+  id: number
+  name: string
+  company?: string | null
+  frequency: string
+  due_day?: number | null
+  next_date?: string | null
+  amount?: number | null
+  autopay?: 'Yes' | 'No'
+  method?: string | null
+  account?: string | null
+  notes?: string | null
+}
+
+type Payment = {
+  id: number
+  bill_id: number
+  paid_date: string
+  amount?: number | null
+  method?: string | null
+  paid_by?: string | null
+  confirm_num?: string | null
+  notes?: string | null
+}
+
+type Details = {
+  bill: Bill
+  upcoming: string[]
+  payments: Payment[]
+}
+
+const props = defineProps<{
+  open: boolean
+  billId: number | null
+}>()
+
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'changed'): void
+}>()
+
+const api = useApi()
+const loading = ref(false)
+const err = ref<string | null>(null)
+const details = ref<Details | null>(null)
+
+const editOpen = ref(false)
+const editingBill = ref<Bill | null>(null)
+
+const fmtMoney = (n: number | null | undefined) =>
+  n == null ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtDate = (d: string | null | undefined) => {
+  if (!d) return '—'
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function today() {
+  return new Date(new Date().toDateString())
+}
+
+function statusForUpcomingDate(iso: string) {
+  const t = today()
+  const dt = new Date(iso + 'T00:00:00')
+  const days = Math.round((dt.getTime() - t.getTime()) / 86400000)
+  if (days < 0) return { badge: 'overdue', label: 'Overdue', right: `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue` }
+  if (days === 0) return { badge: 'due-soon', label: 'Due today', right: 'Due today!' }
+  if (days <= 15) return { badge: 'due-soon', label: 'Due soon', right: `In ${days} day${days === 1 ? '' : 's'}` }
+  return { badge: 'upcoming', label: 'Upcoming', right: `In ${days} days` }
+}
+
+const bill = computed(() => details.value?.bill || null)
+
+async function load() {
+  if (!props.billId) return
+  loading.value = true
+  err.value = null
+  try {
+    details.value = await api.get<Details>(`/api/bills/${props.billId}/details`)
+  } catch (e: any) {
+    err.value = e?.message || 'Failed to load bill details'
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(
+  () => [props.open, props.billId] as const,
+  async ([isOpen, id]) => {
+    if (!isOpen || !id) return
+    await load()
+  }
+)
+
+function openEdit() {
+  if (!bill.value) return
+  editingBill.value = { ...bill.value }
+  editOpen.value = true
+}
+function closeEdit() {
+  editOpen.value = false
+  editingBill.value = null
+}
+async function afterEditSaved() {
+  closeEdit()
+  await load()
+  emit('changed')
+}
+</script>
+
+<template>
+  <div class="overlay" :class="{ open }" @click.self="emit('close')">
+    <div class="modal detail-modal">
+      <div v-if="loading" class="none-msg">Loading…</div>
+      <div v-else-if="err" class="none-msg">{{ err }}</div>
+      <div v-else-if="!details" class="none-msg">No details.</div>
+      <div v-else>
+        <div class="detail-header" id="detail-header">
+          <div class="detail-bill-name">{{ details.bill.name }}</div>
+          <div class="detail-meta">
+            {{ details.bill.frequency }}
+            <template v-if="details.bill.frequency === 'Monthly' && details.bill.due_day"> · Due day {{ details.bill.due_day }}</template>
+            <template v-else-if="details.bill.next_date"> · Next: {{ fmtDate(details.bill.next_date) }}</template>
+            <template v-if="details.bill.amount != null"> · {{ fmtMoney(details.bill.amount) }}</template>
+            <template v-if="details.bill.autopay === 'Yes'"> · AUTO-PAY</template>
+            <template v-if="details.bill.method"> · {{ details.bill.method }}</template>
+            <template v-if="details.bill.account"><br />Account: {{ details.bill.account }}</template>
+            <template v-if="details.bill.notes"><br />{{ details.bill.notes }}</template>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div>
+            <div class="detail-section-title">Upcoming</div>
+            <div v-if="!details.upcoming?.length" class="detail-empty">No upcoming dates found.</div>
+            <div v-else>
+              <div v-for="d in details.upcoming" :key="d" class="detail-upcoming-row">
+                <div>
+                  <strong>{{ fmtDate(d) }}</strong>
+                  <span style="margin-left:8px" class="badge" :class="statusForUpcomingDate(d).badge">{{ statusForUpcomingDate(d).label }}</span>
+                </div>
+                <div style="color:var(--ink-light)">{{ statusForUpcomingDate(d).right }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="detail-section-title">Recent Payments</div>
+            <div v-if="!details.payments?.length" class="detail-empty">No payments recorded yet.</div>
+            <div v-else>
+              <div v-for="p in details.payments" :key="p.id" class="detail-pay-row">
+                <div class="detail-pay-date">
+                  {{ fmtDate(p.paid_date) }}
+                  <span class="detail-pay-amt">{{ fmtMoney(p.amount) }}</span>
+                </div>
+                <div class="detail-pay-meta">
+                  <span v-if="p.method">{{ p.method }}</span>
+                  <span v-if="p.paid_by"> · Paid by: {{ p.paid_by }}</span>
+                  <span v-if="p.confirm_num"> · Ref: {{ p.confirm_num }}</span>
+                  <span v-if="p.notes"><br />{{ p.notes }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mfooter">
+          <button class="btn btn-ghost" @click="emit('close')">Close</button>
+          <button class="btn btn-primary" @click="openEdit()">Edit Bill</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <BillModal :open="editOpen" :bill="editingBill" @close="closeEdit()" @saved="afterEditSaved()" />
+</template>
+

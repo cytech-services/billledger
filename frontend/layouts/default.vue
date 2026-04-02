@@ -1,0 +1,25 @@
+<script setup lang="ts">
+import { useHead } from '#imports'
+import TopNav from '~/components/TopNav.vue'
+
+useHead({
+  title: 'Bill Ledger',
+  link: [
+    {
+      rel: 'stylesheet',
+      href: 'https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap',
+    },
+    { rel: 'stylesheet', href: '/legacy.css' },
+  ],
+})
+</script>
+
+<template>
+  <div>
+    <TopNav />
+    <main>
+      <slot />
+    </main>
+  </div>
+</template>
+
