@@ -9,6 +9,7 @@ import { registerBackupsRoutes } from './routes/backups';
 import { registerPaymentMethodRoutes } from './routes/paymentMethods';
 import { registerPaymentRoutes } from './routes/payments';
 import { registerBillRoutes } from './routes/bills';
+import { registerOccurrenceRoutes } from './routes/occurrences';
 
 export const app = express();
 
@@ -747,184 +748,14 @@ registerBillRoutes(app, {
   formatDate
 });
 
-// --- Dashboard occurrences ---
-app.get('/api/dashboard-occurrences', (req, res) => {
-  const todayDt = startOfDay();
-  const monthStart = new Date(todayDt.getFullYear(), todayDt.getMonth(), 1);
-  const monthEnd = new Date(todayDt.getFullYear(), todayDt.getMonth() + 1, 0);
-  const minDue = new Date(todayDt);
-  minDue.setDate(minDue.getDate() - 30);
-
-  const fromRaw = req.query.from ? String(req.query.from).trim() : formatDate(minDue);
-  const toRaw = req.query.to ? String(req.query.to).trim() : formatDate(monthEnd);
-  const m1 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromRaw);
-  const m2 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toRaw);
-  if (!m1 || !m2) {
-    res.status(400).json({ error: 'Invalid from/to date. Expected YYYY-MM-DD.' });
-    return;
-  }
-
-  const from = fromRaw;
-  const to = toRaw;
-  const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all() as BillRow[];
-  const startObj = isoDate(from);
-  const endObj = isoDate(to);
-  for (const bill of bills) {
-    upsertOccurrencesForBill(bill, startObj, endObj);
-  }
-
-  const rows = ensureDb()
-    .prepare(
-      `
-      SELECT
-        o.id AS occurrence_id,
-        o.bill_id AS bill_id,
-        o.due_date AS due_date,
-        o.expected_amount AS expected_amount,
-        b.name AS bill_name,
-        b.company AS company,
-        b.frequency AS frequency,
-        b.autopay AS autopay,
-        p.id AS payment_id,
-        p.paid_date AS paid_date,
-        p.amount AS paid_amount
-      FROM bill_occurrences o
-      JOIN bills b ON b.id = o.bill_id
-      LEFT JOIN payments p
-        ON p.id = (
-          SELECT p2.id
-          FROM payments p2
-          WHERE p2.occurrence_id = o.id
-          ORDER BY p2.paid_date DESC, p2.id DESC
-          LIMIT 1
-        )
-      WHERE o.due_date BETWEEN ? AND ?
-      ORDER BY o.due_date ASC, b.name ASC
-    `
-    )
-    .all(from, to) as DashboardOccurrenceRow[];
-
-  res.json({
-    today: formatDate(todayDt),
-    month_start: formatDate(monthStart),
-    month_end: formatDate(monthEnd),
-    overdue_window_start: formatDate(minDue),
-    occurrences: rows
-  });
-});
-
-// --- Year view ---
-app.get('/api/year-view', (req, res) => {
-  const year = Number(req.query.year || new Date().getFullYear());
-  const today = startOfDay();
-
-  const yearStart = new Date(year, 0, 1);
-  const end = new Date(year, 11, 31);
-  const startStr = formatDate(yearStart);
-  const endStr = formatDate(end);
-
-  const yearPaidTotalRow = ensureDb()
-    .prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE paid_date BETWEEN ? AND ?')
-    .get(startStr, endStr) as { total: number | null } | undefined;
-  const yearPaidTotal = Number(yearPaidTotalRow?.total || 0);
-
-  const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills`).all() as BillRow[];
-
-  const allOccurrences = (ensureDb()
-    .prepare(
-      `
-      SELECT
-        o.id AS occurrence_id,
-        o.bill_id AS bill_id,
-        b.name AS bill_name,
-        COALESCE(b.company, '') AS company,
-        COALESCE(o.expected_amount, b.amount) AS amount,
-        o.due_date AS due_date,
-        b.frequency AS frequency,
-        b.autopay AS autopay,
-        p.id AS payment_id,
-        p.paid_date AS paid_date,
-        p.paid_by AS paid_by,
-        p.amount AS paid_amount
-      FROM bill_occurrences o
-      JOIN bills b ON b.id = o.bill_id
-      LEFT JOIN payments p
-        ON p.id = (
-          SELECT p2.id
-          FROM payments p2
-          WHERE p2.occurrence_id = o.id
-          ORDER BY p2.paid_date DESC, p2.id DESC
-          LIMIT 1
-        )
-      WHERE o.due_date BETWEEN ? AND ?
-      ORDER BY o.due_date ASC, b.name ASC
-    `
-    )
-    .all(startStr, endStr) as YearOccurrenceRow[])
-    .map((occ): YearOccurrenceOut => {
-      const occObj = isoDate(occ.due_date);
-      let status: YearOccurrenceOut['status'] = 'upcoming';
-      if (occObj < today) status = 'overdue';
-      if (occ.payment_id) status = 'paid';
-      else {
-        const diffDays = Math.round((occObj.getTime() - today.getTime()) / 86400000);
-        if (diffDays >= 0 && diffDays <= 15) status = 'due-soon';
-      }
-      return {
-        occurrence_id: occ.occurrence_id,
-        payment_id: occ.payment_id ?? null,
-        bill_id: occ.bill_id,
-        bill_name: occ.bill_name,
-        company: occ.company,
-        amount: occ.amount,
-        due_date: occ.due_date,
-        frequency: occ.frequency,
-        autopay: occ.autopay,
-        status,
-        paid_date: occ.paid_date || null,
-        paid_by: occ.paid_by || null,
-        paid_amount: occ.paid_amount ?? null
-      };
-    });
-
-  allOccurrences.sort((a, b) => a.due_date.localeCompare(b.due_date));
-
-  const months: Record<string, { occurrences: YearOccurrenceOut[]; total: number; total_unpaid: number }> = {};
-  for (const occ of allOccurrences) {
-    const monthKey = occ.due_date.slice(0, 7);
-    if (!months[monthKey]) months[monthKey] = { occurrences: [], total: 0, total_unpaid: 0 };
-    months[monthKey].occurrences.push(occ);
-    months[monthKey].total += occ.amount || 0;
-    if (occ.status !== 'paid') months[monthKey].total_unpaid += occ.amount || 0;
-  }
-
-  res.json({
-    year,
-    year_total: allOccurrences.reduce((sum, occ) => sum + (occ.amount || 0), 0),
-    year_unpaid: allOccurrences.filter((occ) => occ.status !== 'paid').reduce((sum, occ) => sum + (occ.amount || 0), 0),
-    year_paid_total: Number(yearPaidTotal || 0),
-    count: allOccurrences.length,
-    months: Object.entries(months)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, data]) => ({ month, ...data }))
-  });
-});
-
-app.get('/api/summary', (_req, res) => {
-  const month = formatDate(new Date()).slice(0, 7);
-  const range = monthDateRange(month);
-  const totalBillsRow = ensureDb().prepare('SELECT COUNT(*) AS count FROM bills').get() as { count: number } | undefined;
-  const totalBills = Number(totalBillsRow?.count || 0);
-  const paidThisMonthRow = ensureDb()
-    .prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE paid_date >= ? AND paid_date <= ?')
-    .get(range?.start || `${month}-01`, range?.end || `${month}-31`) as { total: number | null } | undefined;
-  const paidThisMonth = Number(paidThisMonthRow?.total || 0);
-
-  res.json({
-    total_bills: totalBills,
-    paid_this_month: paidThisMonth,
-    today: formatDate(new Date())
-  });
+registerOccurrenceRoutes(app, {
+  ensureDb,
+  billFields: BILL_FIELDS,
+  startOfDay,
+  formatDate,
+  isoDate,
+  monthDateRange,
+  upsertOccurrencesForBill
 });
 
 export function startApp() {
