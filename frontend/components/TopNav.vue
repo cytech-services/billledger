@@ -47,16 +47,27 @@ function navBtnClass(name: string) {
     </nav>
     <div class="flex items-center gap-2">
       <label for="theme-select" class="text-[1.1rem] font-bold uppercase tracking-[.4px] text-white/70">Theme</label>
-      <select
-        id="theme-select"
-        class="min-w-[88px] cursor-pointer rounded-[7px] border border-white/20 bg-white/10 px-[10px] py-[6px] text-[1.2rem] text-white focus:outline-none focus:ring-2 focus:ring-white/20"
-        :value="preference"
-        @change="setPreference(($event.target as HTMLSelectElement).value)"
-      >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
+      <div class="relative">
+        <select
+          id="theme-select"
+          class="min-w-[108px] cursor-pointer rounded-[7px] border border-[color:var(--border)] bg-[color:var(--paper)] py-[6px] pl-[10px] pr-[30px] text-[1.2rem] text-[color:var(--ink)] shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)]/25 [appearance:none] [-webkit-appearance:none] [-moz-appearance:none]"
+          :value="preference"
+          @change="setPreference(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+        <svg
+          class="pointer-events-none absolute right-[10px] top-1/2 h-[10px] w-[10px] -translate-y-1/2 text-[color:var(--ink-light)]"
+          viewBox="0 0 10 6"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
     </div>
   </header>
 </template>
