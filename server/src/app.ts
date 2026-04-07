@@ -5,6 +5,8 @@ import Database from 'better-sqlite3';
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
+import { registerBackupsRoutes } from './routes/backups';
+import { registerPaymentMethodRoutes } from './routes/paymentMethods';
 
 export const app = express();
 
@@ -689,158 +691,24 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-// --- Backups ---
-app.get('/api/backups', async (_req, res) => {
-  res.json(await listBackups());
+registerBackupsRoutes(app, {
+  parseBody,
+  listBackups,
+  getBackupStatus,
+  createBackup,
+  pruneOldBackups,
+  connectDb,
+  initDb,
+  seedPaymentMethods,
+  backupDir: BACKUP_DIR,
+  dbPath: DB_PATH
 });
 
-app.get('/api/backups/status', async (_req, res) => {
-  res.json(await getBackupStatus());
-});
-
-app.post('/api/backups', async (_req, res) => {
-  const backup = await createBackup('manual');
-  await pruneOldBackups();
-  res.status(201).json({ ok: true, backup });
-});
-
-app.post('/api/backups/restore', async (req, res) => {
-  const body = parseBody(
-    req,
-    res,
-    z.object({
-      filename: z.string().trim().min(1)
-    })
-  );
-  if (!body) return;
-  const filename = path.basename(body.filename);
-  if (!filename) {
-    res.status(400).json({ error: 'filename is required' });
-    return;
-  }
-  const backupPath = path.join(BACKUP_DIR, filename);
-  try {
-    await fsp.access(backupPath);
-  } catch {
-    res.status(404).json({ error: 'Backup not found' });
-    return;
-  }
-
-  await fsp.copyFile(backupPath, DB_PATH);
-  connectDb();
-  initDb();
-  seedPaymentMethods();
-
-  res.json({ ok: true, restored_from: filename });
-});
-
-app.get('/api/backups/:filename/download', async (req, res) => {
-  const filename = path.basename(String(req.params.filename || '').trim());
-  const backupPath = path.join(BACKUP_DIR, filename);
-  try {
-    await fsp.access(backupPath);
-  } catch {
-    res.status(404).json({ error: 'Backup not found' });
-    return;
-  }
-  res.download(backupPath, filename);
-});
-
-// --- Payment methods ---
-app.get('/api/payment-methods', (_req, res) => {
-  const rows = ensureDb().prepare('SELECT name FROM payment_methods ORDER BY name').all();
-  res.json(rows.map((r) => (r as { name: string }).name));
-});
-
-app.post('/api/payment-methods', (req, res) => {
-  const body = parseBody(req, res, z.object({ name: z.string().trim().min(1) }));
-  if (!body) return;
-  const name = normalizeMethodName(body.name);
-  if (!name) {
-    res.status(400).json({ error: 'name is required' });
-    return;
-  }
-  savePaymentMethod(name);
-  res.status(201).json({ ok: true });
-});
-
-app.get('/api/payment-methods/stats', (_req, res) => {
-  const rows = ensureDb()
-    .prepare(
-      `
-    SELECT
-      pm.name AS name,
-      COALESCE(pc.bill_count, 0) AS bill_count,
-      COALESCE(pc.payment_count, 0) AS payment_count,
-      COALESCE(pc.total_paid, 0) AS total_paid
-    FROM payment_methods pm
-    LEFT JOIN (
-      SELECT method, COUNT(*) AS payment_count, COUNT(DISTINCT bill_id) AS bill_count, COALESCE(SUM(amount), 0) AS total_paid
-      FROM payments
-      WHERE TRIM(COALESCE(method, '')) != ''
-      GROUP BY method
-    ) pc ON LOWER(TRIM(pc.method)) = LOWER(TRIM(pm.name))
-    ORDER BY pm.name
-  `
-    )
-    .all();
-  res.json(rows);
-});
-
-app.post('/api/payment-methods/replace', (req, res) => {
-  const body = parseBody(
-    req,
-    res,
-    z.object({
-      from: z.string().trim().min(1),
-      to: z.string().trim().min(1),
-      replace_bill_defaults: z.boolean().optional().default(false)
-    })
-  );
-  if (!body) return;
-  const from = normalizeMethodName(body.from);
-  const to = normalizeMethodName(body.to);
-  const replaceBillDefaults = Boolean(body.replace_bill_defaults);
-  if (!from || !to) {
-    res.status(400).json({ error: 'from and to are required' });
-    return;
-  }
-
-  const tx = ensureDb().transaction(() => {
-    const paymentsUpdated = ensureDb()
-      .prepare('UPDATE payments SET method = ? WHERE LOWER(method) = LOWER(?)')
-      .run(to, from).changes;
-    let billsUpdated = 0;
-    if (replaceBillDefaults) {
-      billsUpdated = ensureDb()
-        .prepare('UPDATE bills SET method = ? WHERE LOWER(method) = LOWER(?)')
-        .run(to, from).changes;
-    }
-    return { paymentsUpdated, billsUpdated };
-  });
-
-  const result = tx();
-  res.json(result);
-});
-
-app.delete('/api/payment-methods/:name', (req, res) => {
-  const name = normalizeMethodName(req.params.name);
-  if (!name) {
-    res.status(400).json({ error: 'name is required' });
-    return;
-  }
-
-  const usedRow = ensureDb()
-    .prepare('SELECT COUNT(*) AS c FROM payments WHERE LOWER(method) = LOWER(?)')
-    .get(name) as { c: number } | undefined;
-  const used = Number(usedRow?.c || 0);
-  if (used > 0) {
-    res.status(409).json({ error: 'Method is used by payments', requires_replacement: true, payment_count: used });
-    return;
-  }
-
-  ensureDb().prepare('DELETE FROM payment_methods WHERE LOWER(name) = LOWER(?)').run(name);
-  res.json({ ok: true });
+registerPaymentMethodRoutes(app, {
+  ensureDb,
+  parseBody,
+  normalizeMethodName,
+  savePaymentMethod
 });
 
 // --- Bills ---
