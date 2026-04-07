@@ -606,10 +606,37 @@ function getBillMonthDayCombinations(billId: number) {
   return ensureDb()
     .prepare('SELECT month_day FROM bill_month_day_combinations WHERE bill_id = ? ORDER BY month_day')
     .all(billId)
-    .map((r: any) => String(r.month_day));
+    .map((r) => String((r as { month_day: string }).month_day));
 }
 
-function attachBillSchedule(bill: any) {
+type BillRow = {
+  id: number;
+  name: string;
+  company: string | null;
+  frequency: string;
+  due_day: number | null;
+  next_date: string | null;
+  amount: number | null;
+  autopay: 'Yes' | 'No';
+  method: string | null;
+  account: string | null;
+  notes: string | null;
+  created: string;
+};
+
+type PaymentRow = {
+  id: number;
+  bill_id: number;
+  occurrence_id: number | null;
+  paid_date: string;
+  amount: number | null;
+  method: string | null;
+  paid_by: string | null;
+  confirm_num: string | null;
+  notes: string | null;
+};
+
+function attachBillSchedule<T extends { id: number } | null | undefined>(bill: T) {
   if (!bill) return bill;
   return {
     ...bill,
@@ -624,7 +651,7 @@ app.use(express.json());
 const BILL_FIELDS = 'id, name, company, frequency, due_day, next_date, amount, autopay, method, account, notes, created';
 
 function getBillById(id: number) {
-  return ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills WHERE id = ?`).get(id);
+  return ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills WHERE id = ?`).get(id) as BillRow | undefined;
 }
 
 app.get('/health', (_req, res) => {
@@ -774,7 +801,7 @@ app.delete('/api/payment-methods/:name', (req, res) => {
 
   const usedRow = ensureDb()
     .prepare('SELECT COUNT(*) AS c FROM payments WHERE LOWER(method) = LOWER(?)')
-    .get(name) as any;
+    .get(name) as { c: number } | undefined;
   const used = Number(usedRow?.c || 0);
   if (used > 0) {
     res.status(409).json({ error: 'Method is used by payments', requires_replacement: true, payment_count: used });
@@ -787,7 +814,7 @@ app.delete('/api/payment-methods/:name', (req, res) => {
 
 // --- Bills ---
 app.get('/api/bills', (_req, res) => {
-  const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills ORDER BY name`).all() as any[];
+  const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills ORDER BY name`).all() as BillRow[];
   res.json(bills.map((b) => attachBillSchedule(b)));
 });
 
@@ -825,7 +852,7 @@ app.get('/api/bills/:id/details', (req, res) => {
        LIMIT 20`
     )
     .all(billId, formatDate(today), formatDate(end))
-    .map((r: any) => r.due_date);
+    .map((r) => (r as { due_date: string }).due_date);
 
   res.json({
     bill: attachBillSchedule(bill),
@@ -892,7 +919,7 @@ app.post('/api/bills', (req, res) => {
     for (const md of normalizedMonthDays) insertMonthDay.run(billId, md);
 
     savePaymentMethod(d.method);
-    const insertedBill = getBillById(billId) as any;
+    const insertedBill = getBillById(billId);
     if (insertedBill) {
       const start = backfillWindowStart(startOfDay());
       const end = backfillWindowEnd(startOfDay());
@@ -973,7 +1000,7 @@ app.put('/api/bills/:id', (req, res) => {
     for (const md of normalizedMonthDays) insertMonthDay.run(billId, md);
 
     savePaymentMethod(d.method);
-    const updatedBill = getBillById(billId) as any;
+    const updatedBill = getBillById(billId);
     if (updatedBill) {
       const start = backfillWindowStart(startOfDay());
       const end = backfillWindowEnd(startOfDay());
@@ -1011,7 +1038,7 @@ app.get('/api/payments', (req, res) => {
   const to = req.query.to ? String(req.query.to) : formatDate(startOfDay(new Date()));
   let sql =
     'SELECT p.*, b.name AS bill_name, o.due_date AS occurrence_due_date FROM payments p LEFT JOIN bills b ON b.id = p.bill_id LEFT JOIN bill_occurrences o ON o.id = p.occurrence_id WHERE 1=1';
-  const args: any[] = [];
+  const args: Array<string | number> = [];
 
   if (billIdRaw != null && String(billIdRaw).trim()) {
     const ids = String(billIdRaw)
@@ -1081,7 +1108,7 @@ app.post('/api/payments', (req, res) => {
   if (d.occurrence_id != null) {
     const occ = ensureDb()
       .prepare('SELECT id, bill_id FROM bill_occurrences WHERE id = ?')
-      .get(Number(d.occurrence_id)) as any;
+      .get(Number(d.occurrence_id)) as { id: number; bill_id: number } | undefined;
     if (!occ || Number(occ.bill_id) !== Number(d.bill_id)) {
       res.status(400).json({ error: 'Invalid occurrence_id for bill_id' });
       return;
@@ -1089,7 +1116,7 @@ app.post('/api/payments', (req, res) => {
   }
 
   const tx = ensureDb().transaction(() => {
-    ensureOccurrencesForBillAroundDate(bill as any, d.paid_date);
+    ensureOccurrencesForBillAroundDate(bill, d.paid_date);
     let occurrenceId: number | null = null;
     if (d.occurrence_id != null) {
       occurrenceId = Number(d.occurrence_id);
@@ -1102,8 +1129,8 @@ app.post('/api/payments', (req, res) => {
         d.bill_id,
         occurrenceId,
         d.paid_date,
-        d.amount == null ? (bill as any).amount : d.amount,
-        d.method || (bill as any).method || '',
+        d.amount == null ? bill.amount : d.amount,
+        d.method || bill.method || '',
         d.paid_by || '',
         d.confirm_num || '',
         d.notes || ''
@@ -1111,16 +1138,16 @@ app.post('/api/payments', (req, res) => {
 
     savePaymentMethod(d.method);
 
-    if ((bill as any).next_date) {
-      let dt = isoDate((bill as any).next_date);
+    if (bill.next_date) {
+      let dt = isoDate(bill.next_date);
       const today = startOfDay();
-      let next = shiftDate(dt, (bill as any).frequency, 1);
+      let next = shiftDate(dt, bill.frequency, 1);
       while (next && next <= today) {
         dt = next;
-        next = shiftDate(dt, (bill as any).frequency, 1);
+        next = shiftDate(dt, bill.frequency, 1);
       }
       if (next) {
-        ensureDb().prepare('UPDATE bills SET next_date = ? WHERE id = ?').run(formatDate(next), (bill as any).id);
+        ensureDb().prepare('UPDATE bills SET next_date = ? WHERE id = ?').run(formatDate(next), bill.id);
       }
     }
   });
@@ -1131,7 +1158,7 @@ app.post('/api/payments', (req, res) => {
 
 app.put('/api/payments/:id', (req, res) => {
   const paymentId = Number(req.params.id);
-  const existing = ensureDb().prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as any;
+  const existing = ensureDb().prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as PaymentRow | undefined;
   if (!existing) {
     res.status(404).json({ error: 'Payment not found' });
     return;
@@ -1156,7 +1183,7 @@ app.put('/api/payments/:id', (req, res) => {
   const paidBy = d.paid_by == null ? existing.paid_by : d.paid_by;
   const confirmNum = d.confirm_num == null ? existing.confirm_num : d.confirm_num;
   const notes = d.notes == null ? existing.notes : d.notes;
-  const bill = getBillById(Number(existing.bill_id)) as any;
+  const bill = getBillById(Number(existing.bill_id));
   let occurrenceId = existing.occurrence_id ?? null;
   if (d.paid_date && bill) {
     ensureOccurrencesForBillAroundDate(bill, paidDate);
