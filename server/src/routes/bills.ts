@@ -1,23 +1,9 @@
 import express from 'express';
 import { z } from 'zod';
 import Database from 'better-sqlite3';
+import type { BillRow } from '../types/db';
 
 type ParseBody = <T extends z.ZodTypeAny>(req: express.Request, res: express.Response, schema: T) => z.infer<T> | null;
-
-type BillRow = {
-  id: number;
-  name: string;
-  company: string | null;
-  frequency: string;
-  due_day: number | null;
-  next_date: string | null;
-  amount: number | null;
-  autopay: 'Yes' | 'No';
-  method: string | null;
-  account: string | null;
-  notes: string | null;
-  created: string;
-};
 
 type BillsDeps = {
   ensureDb: () => Database.Database;

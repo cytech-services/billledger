@@ -10,6 +10,7 @@ import { registerPaymentMethodRoutes } from './routes/paymentMethods';
 import { registerPaymentRoutes } from './routes/payments';
 import { registerBillRoutes } from './routes/bills';
 import { registerOccurrenceRoutes } from './routes/occurrences';
+import type { BillRow, DashboardOccurrenceRow, PaymentRow, YearOccurrenceOut, YearOccurrenceRow } from './types/db';
 
 export const app = express();
 
@@ -613,64 +614,6 @@ function getBillMonthDayCombinations(billId: number) {
     .all(billId)
     .map((r) => String((r as { month_day: string }).month_day));
 }
-
-type BillRow = {
-  id: number;
-  name: string;
-  company: string | null;
-  frequency: string;
-  due_day: number | null;
-  next_date: string | null;
-  amount: number | null;
-  autopay: 'Yes' | 'No';
-  method: string | null;
-  account: string | null;
-  notes: string | null;
-  created: string;
-};
-
-type PaymentRow = {
-  id: number;
-  bill_id: number;
-  occurrence_id: number | null;
-  paid_date: string;
-  amount: number | null;
-  method: string | null;
-  paid_by: string | null;
-  confirm_num: string | null;
-  notes: string | null;
-};
-
-type DashboardOccurrenceRow = {
-  occurrence_id: number;
-  bill_id: number;
-  due_date: string;
-  expected_amount: number | null;
-  bill_name: string;
-  company: string | null;
-  frequency: string;
-  autopay: 'Yes' | 'No';
-  payment_id: number | null;
-  paid_date: string | null;
-  paid_amount: number | null;
-};
-
-type YearOccurrenceRow = {
-  occurrence_id: number;
-  payment_id: number | null;
-  bill_id: number;
-  bill_name: string;
-  company: string;
-  amount: number | null;
-  due_date: string;
-  frequency: string;
-  autopay: 'Yes' | 'No';
-  paid_date: string | null;
-  paid_by: string | null;
-  paid_amount: number | null;
-};
-
-type YearOccurrenceOut = YearOccurrenceRow & { status: 'overdue' | 'due-soon' | 'upcoming' | 'paid' };
 
 function attachBillSchedule<T extends { id: number } | null | undefined>(bill: T) {
   if (!bill) return bill;
