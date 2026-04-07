@@ -1,4 +1,4 @@
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 type ThemePref = 'system' | 'light' | 'dark'
 const KEY = 'billledger.theme'
@@ -18,6 +18,8 @@ function apply(pref: ThemePref) {
 
 export function useTheme() {
   const preference = ref<ThemePref>('system')
+  let media: MediaQueryList | null = null
+  let mediaListener: ((e: MediaQueryListEvent) => void) | null = null
 
   function setPreference(next: string) {
     const v = normalize(next)
@@ -29,10 +31,18 @@ export function useTheme() {
   onMounted(() => {
     preference.value = normalize(localStorage.getItem(KEY))
     apply(preference.value)
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    media.addEventListener('change', () => {
+    media = window.matchMedia('(prefers-color-scheme: dark)')
+    mediaListener = () => {
       if (preference.value === 'system') apply('system')
-    })
+    }
+    if (typeof media.addEventListener === 'function') media.addEventListener('change', mediaListener)
+    else if (typeof media.addListener === 'function') media.addListener(mediaListener)
+  })
+
+  onUnmounted(() => {
+    if (!media || !mediaListener) return
+    if (typeof media.removeEventListener === 'function') media.removeEventListener('change', mediaListener)
+    else if (typeof media.removeListener === 'function') media.removeListener(mediaListener)
   })
 
   return { preference, setPreference }

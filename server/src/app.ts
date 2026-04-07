@@ -369,6 +369,17 @@ function formatDate(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+function monthDateRange(month: string) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(month || '').trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mon = Number(m[2]);
+  if (!Number.isInteger(y) || !Number.isInteger(mon) || mon < 1 || mon > 12) return null;
+  const start = new Date(y, mon - 1, 1);
+  const end = new Date(y, mon, 0);
+  return { start: formatDate(start), end: formatDate(end) };
+}
+
 function isoDate(s: string) {
   const m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(s || '').trim());
   if (!m) return new Date(s);
@@ -1016,8 +1027,13 @@ app.get('/api/payments', (req, res) => {
     }
   }
   if (month) {
-    sql += " AND strftime('%Y-%m', p.paid_date) = ?";
-    args.push(month);
+    const range = monthDateRange(month);
+    if (!range) {
+      res.status(400).json({ error: 'Invalid month. Expected YYYY-MM.' });
+      return;
+    }
+    sql += ' AND p.paid_date >= ? AND p.paid_date <= ?';
+    args.push(range.start, range.end);
   }
   if (from) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(from.trim());
@@ -1325,11 +1341,12 @@ app.get('/api/year-view', (req, res) => {
 
 app.get('/api/summary', (_req, res) => {
   const month = formatDate(new Date()).slice(0, 7);
+  const range = monthDateRange(month);
   const totalBillsRow = ensureDb().prepare('SELECT COUNT(*) AS count FROM bills').get() as any;
   const totalBills = Number(totalBillsRow?.count || 0);
   const paidThisMonthRow = ensureDb()
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE strftime('%Y-%m', paid_date) = ?")
-    .get(month) as any;
+    .prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE paid_date >= ? AND paid_date <= ?')
+    .get(range?.start || `${month}-01`, range?.end || `${month}-31`) as any;
   const paidThisMonth = Number(paidThisMonthRow?.total || 0);
 
   res.json({
