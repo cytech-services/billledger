@@ -11,6 +11,7 @@ import { registerPaymentRoutes } from './routes/payments';
 import { registerBillRoutes } from './routes/bills';
 import { registerOccurrenceRoutes } from './routes/occurrences';
 import type { BillRow, DashboardOccurrenceRow, PaymentRow, YearOccurrenceOut, YearOccurrenceRow } from './types/db';
+import { AutopaySchema, FrequencySchema, IsoDateSchema } from './types/schemas';
 
 export const app = express();
 
@@ -551,26 +552,6 @@ function calcOccurrences(bill: BillRow, startDate: Date, endDate: Date) {
 
   return result;
 }
-
-const FrequencySchema = z.enum([
-  'Monthly',
-  'Bi-Monthly',
-  'Quarterly',
-  'Semi-Annual',
-  'Annual',
-  'Weekly',
-  'Bi-Weekly',
-  'Estimated Tax (US/NY)',
-  'Yearly (Month/Day)',
-  'Custom'
-]);
-
-const AutopaySchema = z.enum(['Yes', 'No']).default('No');
-
-const IsoDateSchema = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date in YYYY-MM-DD format');
 
 function parseBody<T extends z.ZodTypeAny>(req: express.Request, res: express.Response, schema: T): z.infer<T> | null {
   const result = schema.safeParse(req.body);
