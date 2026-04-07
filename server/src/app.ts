@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { registerBackupsRoutes } from './routes/backups';
 import { registerPaymentMethodRoutes } from './routes/paymentMethods';
 import { registerPaymentRoutes } from './routes/payments';
+import { registerBillRoutes } from './routes/bills';
 
 export const app = express();
 
@@ -727,210 +728,23 @@ registerPaymentRoutes(app, {
   isoDate
 });
 
-// --- Bills ---
-app.get('/api/bills', (_req, res) => {
-  const bills = ensureDb().prepare(`SELECT ${BILL_FIELDS} FROM bills ORDER BY name`).all() as BillRow[];
-  res.json(bills.map((b) => attachBillSchedule(b)));
-});
-
-app.get('/api/bills/:id', (req, res) => {
-  const bill = getBillById(Number(req.params.id));
-  if (!bill) {
-    res.status(404).json({ error: 'Bill not found' });
-    return;
-  }
-  res.json(attachBillSchedule(bill));
-});
-
-app.get('/api/bills/:id/details', (req, res) => {
-  const billId = Number(req.params.id);
-  const bill = getBillById(billId);
-  if (!bill) {
-    res.status(404).json({ error: 'Bill not found' });
-    return;
-  }
-
-  const payments = ensureDb()
-    .prepare('SELECT * FROM payments WHERE bill_id = ? ORDER BY paid_date DESC LIMIT 50')
-    .all(billId);
-
-  const today = startOfDay();
-  const end = futureHorizonEnd(today);
-
-  upsertOccurrencesForBill(bill, today, end);
-  const upcoming = ensureDb()
-    .prepare(
-      `SELECT due_date
-       FROM bill_occurrences
-       WHERE bill_id = ? AND due_date >= ? AND due_date <= ?
-       ORDER BY due_date
-       LIMIT 20`
-    )
-    .all(billId, formatDate(today), formatDate(end))
-    .map((r) => (r as { due_date: string }).due_date);
-
-  res.json({
-    bill: attachBillSchedule(bill),
-    upcoming,
-    payments
-  });
-});
-
-app.post('/api/bills', (req, res) => {
-  const d = parseBody(
-    req,
-    res,
-    z.object({
-      name: z.string().trim().min(1),
-      company: z.string().optional().default(''),
-      frequency: FrequencySchema,
-      due_day: z.number().int().nullable().optional(),
-      next_date: IsoDateSchema.nullable().optional(),
-      amount: z.number().nonnegative().nullable().optional(),
-      autopay: AutopaySchema.optional(),
-      method: z.string().optional().default(''),
-      account: z.string().optional().default(''),
-      notes: z.string().optional().default(''),
-      custom_dates: z.array(IsoDateSchema).optional().default([]),
-      month_day_combinations: z.array(z.string().trim().regex(/^\d{2}-\d{2}$/)).optional().default([])
-    })
-  );
-  if (!d) return;
-  const parsedMonthDays = (d.month_day_combinations || []).map((v) => normalizeMonthDay(v));
-  const normalizedMonthDays = Array.from(new Set(parsedMonthDays.filter(Boolean))) as string[];
-  if (d.frequency === 'Yearly (Month/Day)' && !normalizedMonthDays.length) {
-    res.status(400).json({ error: 'At least one month/day combination is required' });
-    return;
-  }
-  if (parsedMonthDays.some((v) => !v)) {
-    res.status(400).json({ error: 'month_day_combinations must be valid MM-DD values' });
-    return;
-  }
-  const insert = ensureDb().prepare(
-    `INSERT INTO bills (name, company, frequency, due_day, next_date, amount, autopay, method, account, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-
-  const tx = ensureDb().transaction(() => {
-    const info = insert.run(
-      d.name,
-      d.company || '',
-      d.frequency,
-      d.due_day ?? null,
-      d.next_date ?? null,
-      d.amount ?? null,
-      d.autopay || 'No',
-      d.method || '',
-      d.account || '',
-      d.notes || ''
-    );
-
-    const billId = Number(info.lastInsertRowid);
-    const insertCustomDate = ensureDb().prepare('INSERT INTO bill_custom_dates (bill_id, due_date) VALUES (?, ?)');
-    for (const dt of d.custom_dates || []) {
-      if (dt) insertCustomDate.run(billId, dt);
-    }
-    const insertMonthDay = ensureDb().prepare('INSERT INTO bill_month_day_combinations (bill_id, month_day) VALUES (?, ?)');
-    for (const md of normalizedMonthDays) insertMonthDay.run(billId, md);
-
-    savePaymentMethod(d.method);
-    const insertedBill = getBillById(billId);
-    if (insertedBill) {
-      const start = backfillWindowStart(startOfDay());
-      const end = backfillWindowEnd(startOfDay());
-      upsertOccurrencesForBill(insertedBill, start, end);
-    }
-    return billId;
-  });
-
-  const billId = tx();
-  res.status(201).json(attachBillSchedule(getBillById(billId)));
-});
-
-app.put('/api/bills/:id', (req, res) => {
-  const billId = Number(req.params.id);
-  const existing = getBillById(billId);
-  if (!existing) {
-    res.status(404).json({ error: 'Bill not found' });
-    return;
-  }
-  const d = parseBody(
-    req,
-    res,
-    z.object({
-      name: z.string().trim().min(1),
-      company: z.string().optional().default(''),
-      frequency: FrequencySchema,
-      due_day: z.number().int().nullable().optional(),
-      next_date: IsoDateSchema.nullable().optional(),
-      amount: z.number().nonnegative().nullable().optional(),
-      autopay: AutopaySchema.optional(),
-      method: z.string().optional().default(''),
-      account: z.string().optional().default(''),
-      notes: z.string().optional().default(''),
-      custom_dates: z.array(IsoDateSchema).optional().default([]),
-      month_day_combinations: z.array(z.string().trim().regex(/^\d{2}-\d{2}$/)).optional().default([])
-    })
-  );
-  if (!d) return;
-  const parsedMonthDays = (d.month_day_combinations || []).map((v) => normalizeMonthDay(v));
-  const normalizedMonthDays = Array.from(new Set(parsedMonthDays.filter(Boolean))) as string[];
-  if (d.frequency === 'Yearly (Month/Day)' && !normalizedMonthDays.length) {
-    res.status(400).json({ error: 'At least one month/day combination is required' });
-    return;
-  }
-  if (parsedMonthDays.some((v) => !v)) {
-    res.status(400).json({ error: 'month_day_combinations must be valid MM-DD values' });
-    return;
-  }
-
-  const tx = ensureDb().transaction(() => {
-    ensureDb()
-      .prepare(
-        `UPDATE bills
-         SET name = ?, company = ?, frequency = ?, due_day = ?, next_date = ?, amount = ?, autopay = ?, method = ?, account = ?, notes = ?
-         WHERE id = ?`
-      )
-      .run(
-        d.name,
-        d.company || '',
-        d.frequency,
-        d.due_day ?? null,
-        d.next_date ?? null,
-        d.amount ?? null,
-        d.autopay || 'No',
-        d.method || '',
-        d.account || '',
-        d.notes || '',
-        billId
-      );
-
-    ensureDb().prepare('DELETE FROM bill_custom_dates WHERE bill_id = ?').run(billId);
-    const insertCustomDate = ensureDb().prepare('INSERT INTO bill_custom_dates (bill_id, due_date) VALUES (?, ?)');
-    for (const dt of d.custom_dates || []) {
-      if (dt) insertCustomDate.run(billId, dt);
-    }
-    ensureDb().prepare('DELETE FROM bill_month_day_combinations WHERE bill_id = ?').run(billId);
-    const insertMonthDay = ensureDb().prepare('INSERT INTO bill_month_day_combinations (bill_id, month_day) VALUES (?, ?)');
-    for (const md of normalizedMonthDays) insertMonthDay.run(billId, md);
-
-    savePaymentMethod(d.method);
-    const updatedBill = getBillById(billId);
-    if (updatedBill) {
-      const start = backfillWindowStart(startOfDay());
-      const end = backfillWindowEnd(startOfDay());
-      regenerateFutureUnpaidOccurrencesForBill(updatedBill, start, end);
-    }
-  });
-
-  tx();
-  res.json(attachBillSchedule(getBillById(billId)));
-});
-
-app.delete('/api/bills/:id', (req, res) => {
-  const billId = Number(req.params.id);
-  ensureDb().prepare('DELETE FROM bills WHERE id = ?').run(billId);
-  res.json({ ok: true });
+registerBillRoutes(app, {
+  ensureDb,
+  parseBody,
+  frequencySchema: FrequencySchema,
+  autopaySchema: AutopaySchema,
+  isoDateSchema: IsoDateSchema,
+  normalizeMonthDay,
+  savePaymentMethod,
+  getBillById,
+  attachBillSchedule,
+  backfillWindowStart,
+  backfillWindowEnd,
+  startOfDay,
+  upsertOccurrencesForBill,
+  regenerateFutureUnpaidOccurrencesForBill,
+  futureHorizonEnd,
+  formatDate
 });
 
 // --- Dashboard occurrences ---
