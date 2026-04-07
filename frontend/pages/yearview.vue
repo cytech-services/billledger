@@ -50,6 +50,10 @@ const detailOpen = ref(false)
 const detailBillId = ref<number | null>(null)
 const filterMode = ref<'all' | 'unpaid' | 'paid'>('all')
 
+function errorMessage(e: unknown, fallback: string) {
+  return e instanceof Error && e.message ? e.message : fallback
+}
+
 const fmtMoney = (n: number | null | undefined) =>
   n == null ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -77,8 +81,8 @@ async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
   err.value = null
   try {
     data.value = await api.get<YearView>(`/api/year-view?year=${currentYear.value}`)
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to load year view'
+  } catch (e: unknown) {
+    err.value = errorMessage(e, 'Failed to load year view')
   } finally {
     if (!silent) loading.value = false
     if (preserveScroll) {
@@ -93,8 +97,8 @@ async function openPay(billId: number, occurrenceId?: number | null) {
     const bill = await api.get<any>(`/api/bills/${billId}`)
     payingBill.value = { ...bill, occurrence_id: occurrenceId ?? null }
     payOpen.value = true
-  } catch (e: any) {
-    err.value = e?.message || 'Unable to load bill'
+  } catch (e: unknown) {
+    err.value = errorMessage(e, 'Unable to load bill')
   }
 }
 
@@ -130,8 +134,8 @@ async function openEditPayment(o: YearOccurrence) {
     const p = await api.get<any>(`/api/payments/${o.payment_id}`)
     editingPayment.value = p
     editOpen.value = true
-  } catch (e: any) {
-    err.value = e?.message || 'Unable to load payment'
+  } catch (e: unknown) {
+    err.value = errorMessage(e, 'Unable to load payment')
   }
 }
 

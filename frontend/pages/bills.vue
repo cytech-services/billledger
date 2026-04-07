@@ -30,6 +30,10 @@ const editing = ref<Bill | null>(null)
 const detailOpen = ref(false)
 const detailBillId = ref<number | null>(null)
 
+function errorMessage(e: unknown, fallback: string) {
+  return e instanceof Error && e.message ? e.message : fallback
+}
+
 async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
   const silent = options?.silent === true
   const preserveScroll = options?.preserveScroll === true
@@ -38,8 +42,8 @@ async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
   err.value = null
   try {
     bills.value = await api.get<Bill[]>('/api/bills')
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to load bills'
+  } catch (e: unknown) {
+    err.value = errorMessage(e, 'Failed to load bills')
   } finally {
     if (!silent) loading.value = false
     if (preserveScroll) {
@@ -126,8 +130,8 @@ async function deleteBill(id: number) {
   try {
     await api.del(`/api/bills/${id}`)
     await load({ silent: true, preserveScroll: true })
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to delete bill'
+  } catch (e: unknown) {
+    err.value = errorMessage(e, 'Failed to delete bill')
   }
 }
 

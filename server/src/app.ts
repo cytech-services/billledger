@@ -369,7 +369,7 @@ function formatDate(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-function monthDateRange(month: string) {
+export function monthDateRange(month: string) {
   const m = /^(\d{4})-(\d{2})$/.exec(String(month || '').trim());
   if (!m) return null;
   const y = Number(m[1]);
