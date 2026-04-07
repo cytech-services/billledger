@@ -5,6 +5,7 @@ import { useTheme } from '~/composables/useTheme'
 
 const route = useRoute()
 const { preference, setPreference } = useTheme()
+const logoHeaderSrc = '/logo-header.svg'
 
 const active = computed(() => {
   if (route.path.startsWith('/bills')) return 'bills'
@@ -24,7 +25,9 @@ function navBtnClass(name: string) {
 
 <template>
   <header class="sticky top-0 z-[100] flex h-[60px] items-center justify-between bg-[color:var(--header-bg)] px-[calc(28px*var(--layout-scale-n)/var(--layout-scale-d))] shadow-[0_2px_12px_rgba(0,0,0,.25)]">
-    <div class="flex items-center gap-2 font-['DM_Serif_Display'] text-[2rem] text-white">Bill<span class="text-[color:var(--accent)]">·</span>Ledger</div>
+    <div class="flex items-center">
+      <img :src="logoHeaderSrc" alt="BillLedger" class="h-[38px] w-auto" />
+    </div>
     <nav class="flex gap-[3px]">
       <NuxtLink to="/" custom v-slot="{ navigate }">
         <button :class="navBtnClass('dashboard')" data-page="dashboard" @click="navigate()">Dashboard</button>
