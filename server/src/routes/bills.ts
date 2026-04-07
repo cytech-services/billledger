@@ -24,9 +24,38 @@ type BillsDeps = {
 };
 
 export function registerBillRoutes(app: express.Express, deps: BillsDeps) {
+  const PAYMENT_COLUMNS = 'id, bill_id, occurrence_id, paid_date, amount, method, paid_by, confirm_num, notes';
+
   app.get('/api/bills', (_req, res) => {
-    const bills = deps.ensureDb().prepare(`SELECT id, name, company, frequency, due_day, next_date, amount, autopay, method, account, notes, created FROM bills ORDER BY name`).all() as BillRow[];
-    res.json(bills.map((b) => deps.attachBillSchedule(b)));
+    const db = deps.ensureDb();
+    const bills = db.prepare(`SELECT id, name, company, frequency, due_day, next_date, amount, autopay, method, account, notes, created FROM bills ORDER BY name`).all() as BillRow[];
+    if (!bills.length) {
+      res.json([]);
+      return;
+    }
+
+    const monthDayRows = db
+      .prepare(
+        `SELECT bill_id, month_day
+         FROM bill_month_day_combinations
+         WHERE bill_id IN (${bills.map(() => '?').join(',')})
+         ORDER BY bill_id, month_day`
+      )
+      .all(...bills.map((b) => b.id)) as Array<{ bill_id: number; month_day: string }>;
+
+    const monthDaysByBillId = new Map<number, string[]>();
+    for (const row of monthDayRows) {
+      const current = monthDaysByBillId.get(row.bill_id);
+      if (current) current.push(String(row.month_day));
+      else monthDaysByBillId.set(row.bill_id, [String(row.month_day)]);
+    }
+
+    res.json(
+      bills.map((bill) => ({
+        ...bill,
+        month_day_combinations: monthDaysByBillId.get(bill.id) || []
+      }))
+    );
   });
 
   app.get('/api/bills/:id', (req, res) => {
@@ -46,7 +75,10 @@ export function registerBillRoutes(app: express.Express, deps: BillsDeps) {
       return;
     }
 
-    const payments = deps.ensureDb().prepare('SELECT * FROM payments WHERE bill_id = ? ORDER BY paid_date DESC LIMIT 50').all(billId);
+    const payments = deps
+      .ensureDb()
+      .prepare(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE bill_id = ? ORDER BY paid_date DESC LIMIT 50`)
+      .all(billId);
     const today = deps.startOfDay();
     const end = deps.futureHorizonEnd(today);
 

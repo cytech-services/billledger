@@ -176,9 +176,11 @@ export function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_payments_bill_id ON payments(bill_id);
     CREATE INDEX IF NOT EXISTS idx_payments_paid_date ON payments(paid_date);
+    CREATE INDEX IF NOT EXISTS idx_payments_bill_id_paid_date ON payments(bill_id, paid_date DESC);
     CREATE INDEX IF NOT EXISTS idx_bill_custom_dates_bill_id ON bill_custom_dates(bill_id);
     CREATE INDEX IF NOT EXISTS idx_bill_custom_dates_due_date ON bill_custom_dates(due_date);
     CREATE INDEX IF NOT EXISTS idx_bill_month_day_bill_id ON bill_month_day_combinations(bill_id);
+    CREATE INDEX IF NOT EXISTS idx_bills_name ON bills(name COLLATE NOCASE);
   `);
   ensureDb().exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_bill_month_day_combo ON bill_month_day_combinations(bill_id, month_day)`);
 

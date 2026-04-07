@@ -20,11 +20,15 @@ type PaymentsDeps = {
 };
 
 export function registerPaymentRoutes(app: express.Express, deps: PaymentsDeps) {
+  const MAX_PAYMENTS_LIMIT = 1000;
+  const PAYMENT_COLUMNS = 'p.id, p.bill_id, p.occurrence_id, p.paid_date, p.amount, p.method, p.paid_by, p.confirm_num, p.notes';
+  const PAYMENT_BASE_COLUMNS = 'id, bill_id, occurrence_id, paid_date, amount, method, paid_by, confirm_num, notes';
+
   app.get('/api/payments/:id', (req, res) => {
     const id = Number(req.params.id);
     const payment = deps
       .ensureDb()
-      .prepare('SELECT p.*, b.name AS bill_name FROM payments p LEFT JOIN bills b ON b.id = p.bill_id WHERE p.id = ?')
+      .prepare(`SELECT ${PAYMENT_COLUMNS}, b.name AS bill_name FROM payments p LEFT JOIN bills b ON b.id = p.bill_id WHERE p.id = ?`)
       .get(id);
     if (!payment) {
       res.status(404).json({ error: 'Payment not found' });
@@ -38,9 +42,23 @@ export function registerPaymentRoutes(app: express.Express, deps: PaymentsDeps) 
     const month = req.query.month ? String(req.query.month) : null;
     const from = req.query.from ? String(req.query.from) : null;
     const to = req.query.to ? String(req.query.to) : deps.formatDate(deps.startOfDay(new Date()));
-    let sql =
-      'SELECT p.*, b.name AS bill_name, o.due_date AS occurrence_due_date FROM payments p LEFT JOIN bills b ON b.id = p.bill_id LEFT JOIN bill_occurrences o ON o.id = p.occurrence_id WHERE 1=1';
-    const args: Array<string | number> = [];
+    const limitRaw = req.query.limit;
+    const offsetRaw = req.query.offset;
+    const limitValue = limitRaw == null || String(limitRaw).trim() === '' ? 'all' : String(limitRaw).trim().toLowerCase();
+    const isAllLimit = limitValue === 'all';
+    const limit = isAllLimit ? null : Number(limitValue);
+    const offset = offsetRaw == null || String(offsetRaw).trim() === '' ? 0 : Number(String(offsetRaw).trim());
+    if (!isAllLimit && (!Number.isInteger(limit) || Number(limit) < 1 || Number(limit) > MAX_PAYMENTS_LIMIT)) {
+      res.status(400).json({ error: `Invalid limit. Expected "all" or an integer between 1 and ${MAX_PAYMENTS_LIMIT}.` });
+      return;
+    }
+    if (!Number.isInteger(offset) || offset < 0) {
+      res.status(400).json({ error: 'Invalid offset. Expected a non-negative integer.' });
+      return;
+    }
+
+    const whereClauses: string[] = ['1=1'];
+    const filterArgs: Array<string | number> = [];
 
     if (billIdRaw != null && String(billIdRaw).trim()) {
       const ids = String(billIdRaw)
@@ -48,11 +66,11 @@ export function registerPaymentRoutes(app: express.Express, deps: PaymentsDeps) 
         .map((s) => Number(String(s).trim()))
         .filter((n) => Number.isFinite(n) && n > 0);
       if (ids.length === 1) {
-        sql += ' AND p.bill_id = ?';
-        args.push(ids[0]);
+        whereClauses.push('p.bill_id = ?');
+        filterArgs.push(ids[0]);
       } else if (ids.length > 1) {
-        sql += ` AND p.bill_id IN (${ids.map(() => '?').join(',')})`;
-        args.push(...ids);
+        whereClauses.push(`p.bill_id IN (${ids.map(() => '?').join(',')})`);
+        filterArgs.push(...ids);
       }
     }
     if (month) {
@@ -61,8 +79,9 @@ export function registerPaymentRoutes(app: express.Express, deps: PaymentsDeps) 
         res.status(400).json({ error: 'Invalid month. Expected YYYY-MM.' });
         return;
       }
-      sql += ' AND p.paid_date >= ? AND p.paid_date <= ?';
-      args.push(range.start, range.end);
+      whereClauses.push('p.paid_date >= ?');
+      whereClauses.push('p.paid_date <= ?');
+      filterArgs.push(range.start, range.end);
     }
     if (from) {
       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(from.trim());
@@ -70,8 +89,8 @@ export function registerPaymentRoutes(app: express.Express, deps: PaymentsDeps) 
         res.status(400).json({ error: 'Invalid from date. Expected YYYY-MM-DD.' });
         return;
       }
-      sql += ' AND p.paid_date >= ?';
-      args.push(from.trim());
+      whereClauses.push('p.paid_date >= ?');
+      filterArgs.push(from.trim());
     }
     if (to) {
       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(to.trim());
@@ -79,11 +98,57 @@ export function registerPaymentRoutes(app: express.Express, deps: PaymentsDeps) 
         res.status(400).json({ error: 'Invalid to date. Expected YYYY-MM-DD.' });
         return;
       }
-      sql += ' AND p.paid_date <= ?';
-      args.push(to.trim());
+      whereClauses.push('p.paid_date <= ?');
+      filterArgs.push(to.trim());
     }
-    sql += ' ORDER BY p.paid_date DESC';
-    res.json(deps.ensureDb().prepare(sql).all(...args));
+
+    const whereSql = whereClauses.join(' AND ');
+    const baseSql = `FROM payments p LEFT JOIN bills b ON b.id = p.bill_id WHERE ${whereSql}`;
+
+    if (isAllLimit) {
+      const allSql =
+        `SELECT ${PAYMENT_COLUMNS}, b.name AS bill_name, o.due_date AS occurrence_due_date
+         FROM payments p
+         LEFT JOIN bills b ON b.id = p.bill_id
+         LEFT JOIN bill_occurrences o ON o.id = p.occurrence_id
+         WHERE ${whereSql}
+         ORDER BY p.paid_date DESC`;
+      const allPayments = deps.ensureDb().prepare(allSql).all(...filterArgs);
+      res.json(allPayments);
+      return;
+    }
+
+    const aggregate = deps
+      .ensureDb()
+      .prepare(
+        `SELECT
+           COUNT(*) AS total,
+           COALESCE(SUM(p.amount), 0) AS total_spent,
+           COALESCE(SUM(COALESCE(b.amount, 0)), 0) AS total_estimated
+         ${baseSql}`
+      )
+      .get(...filterArgs) as { total: number; total_spent: number | null; total_estimated: number | null } | undefined;
+
+    const pageSql =
+      `SELECT ${PAYMENT_COLUMNS}, b.name AS bill_name, o.due_date AS occurrence_due_date
+       FROM payments p
+       LEFT JOIN bills b ON b.id = p.bill_id
+       LEFT JOIN bill_occurrences o ON o.id = p.occurrence_id
+       WHERE ${whereSql}
+       ORDER BY p.paid_date DESC
+       LIMIT ? OFFSET ?`;
+    const pagePayments = deps.ensureDb().prepare(pageSql).all(...filterArgs, Number(limit), offset);
+
+    const total = Number(aggregate?.total || 0);
+    const totalSpent = Number(aggregate?.total_spent || 0);
+    const totalEstimated = Number(aggregate?.total_estimated || 0);
+    res.json({
+      payments: pagePayments,
+      total,
+      has_more: offset + pagePayments.length < total,
+      total_estimated: totalEstimated,
+      total_spent: totalSpent
+    });
   });
 
   app.post('/api/payments', (req, res) => {
@@ -162,7 +227,7 @@ export function registerPaymentRoutes(app: express.Express, deps: PaymentsDeps) 
 
   app.put('/api/payments/:id', (req, res) => {
     const paymentId = Number(req.params.id);
-    const existing = deps.ensureDb().prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) as PaymentRow | undefined;
+    const existing = deps.ensureDb().prepare(`SELECT ${PAYMENT_BASE_COLUMNS} FROM payments WHERE id = ?`).get(paymentId) as PaymentRow | undefined;
     if (!existing) {
       res.status(404).json({ error: 'Payment not found' });
       return;

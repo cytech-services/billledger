@@ -154,8 +154,6 @@ export function registerOccurrenceRoutes(app: express.Express, deps: OccurrenceD
         };
       });
 
-    allOccurrences.sort((a, b) => a.due_date.localeCompare(b.due_date));
-
     const months: Record<string, { occurrences: YearOccurrenceOut[]; total: number; total_unpaid: number }> = {};
     for (const occ of allOccurrences) {
       const monthKey = occ.due_date.slice(0, 7);

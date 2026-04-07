@@ -17,11 +17,24 @@ type Payment = {
   confirm_num?: string | null
   notes?: string | null
 }
+type PaginatedPaymentsResponse = {
+  payments: Payment[]
+  total: number
+  has_more: boolean
+  total_estimated: number
+  total_spent: number
+}
 
 const api = useApi()
 const { confirm } = useConfirm()
 const bills = ref<Bill[]>([])
 const payments = ref<Payment[]>([])
+const PAGE_LIMIT = 50
+const pageOffset = ref(0)
+const totalMatches = ref(0)
+const hasMore = ref(false)
+const totalExpectedFromApi = ref<number | null>(null)
+const totalPaidFromApi = ref<number | null>(null)
 const loading = ref(false)
 const err = ref<string | null>(null)
 const selectedBillIds = ref<number[]>([])
@@ -73,10 +86,12 @@ const canAddEditMethod = computed(() => {
   return !paymentMethods.value.some((m) => m.toLowerCase() === q.toLowerCase())
 })
 
-const totalExpected = computed(() =>
-  payments.value.reduce((s, p) => s + (Number(billAmountById.value.get(p.bill_id) ?? 0) || 0), 0)
-)
-const totalPaid = computed(() => payments.value.reduce((s, p) => s + (Number(p.amount) || 0), 0))
+const totalExpected = computed(() => totalExpectedFromApi.value ?? payments.value.reduce((s, p) => s + (Number(billAmountById.value.get(p.bill_id) ?? 0) || 0), 0))
+const totalPaid = computed(() => totalPaidFromApi.value ?? payments.value.reduce((s, p) => s + (Number(p.amount) || 0), 0))
+const pageStart = computed(() => (payments.value.length ? pageOffset.value + 1 : 0))
+const pageEnd = computed(() => pageOffset.value + payments.value.length)
+const totalPages = computed(() => (totalMatches.value > 0 ? Math.ceil(totalMatches.value / PAGE_LIMIT) : 1))
+const currentPage = computed(() => Math.floor(pageOffset.value / PAGE_LIMIT) + 1)
 const fmtMoney = (n: number | null | undefined) =>
   n == null ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -96,10 +111,12 @@ function iso(d: Date) {
   return `${y}-${m}-${day}`
 }
 
-async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
+async function load(options?: { silent?: boolean; preserveScroll?: boolean; resetPagination?: boolean }) {
   const silent = options?.silent === true
   const preserveScroll = options?.preserveScroll === true
+  const resetPagination = options?.resetPagination === true
   const scrollY = preserveScroll ? window.scrollY : 0
+  if (resetPagination) pageOffset.value = 0
   if (!silent) loading.value = true
   err.value = null
   try {
@@ -108,8 +125,23 @@ async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
     if (selectedBillIds.value.length) params.push(`bill_id=${encodeURIComponent(selectedBillIds.value.join(','))}`)
     if (filterFrom.value) params.push(`from=${encodeURIComponent(filterFrom.value)}`)
     if (filterTo.value) params.push(`to=${encodeURIComponent(filterTo.value)}`)
+    params.push(`limit=${PAGE_LIMIT}`)
+    params.push(`offset=${pageOffset.value}`)
     const url = params.length ? `/api/payments?${params.join('&')}` : '/api/payments'
-    payments.value = await api.get<Payment[]>(url)
+    const response = await api.get<Payment[] | PaginatedPaymentsResponse>(url)
+    if (Array.isArray(response)) {
+      payments.value = response
+      totalMatches.value = response.length
+      hasMore.value = false
+      totalExpectedFromApi.value = response.reduce((s, p) => s + (Number(billAmountById.value.get(p.bill_id) ?? 0) || 0), 0)
+      totalPaidFromApi.value = response.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    } else {
+      payments.value = response.payments || []
+      totalMatches.value = Number(response.total || 0)
+      hasMore.value = Boolean(response.has_more)
+      totalExpectedFromApi.value = Number(response.total_estimated || 0)
+      totalPaidFromApi.value = Number(response.total_spent || 0)
+    }
   } catch (e: unknown) {
     err.value = getErrorMessage(e, 'Failed to load payments')
   } finally {
@@ -134,12 +166,28 @@ function toggleBill(id: number) {
   if (idx >= 0) selectedBillIds.value.splice(idx, 1)
   else selectedBillIds.value.push(id)
   selectedBillIds.value.sort((a, b) => a - b)
-  load()
+  load({ resetPagination: true })
 }
 
 function clearBills() {
   selectedBillIds.value = []
-  load()
+  load({ resetPagination: true })
+}
+
+function applyFilters() {
+  load({ resetPagination: true })
+}
+
+function prevPage() {
+  if (pageOffset.value <= 0) return
+  pageOffset.value = Math.max(0, pageOffset.value - PAGE_LIMIT)
+  load({ silent: true, preserveScroll: true })
+}
+
+function nextPage() {
+  if (!hasMore.value) return
+  pageOffset.value += PAGE_LIMIT
+  load({ silent: true, preserveScroll: true })
 }
 
 function openDetail(billId: number) {
@@ -333,11 +381,11 @@ onUnmounted(() => {
       </div>
       <div class="min-w-[180px]">
         <label class="mb-1 ml-1 block text-[1.1rem] font-semibold text-[color:var(--ink-light)]">From</label>
-        <input v-model="filterFrom" type="date" @change="load()" />
+        <input v-model="filterFrom" type="date" @change="applyFilters()" />
       </div>
       <div class="min-w-[180px]">
         <label class="mb-1 ml-1 block text-[1.1rem] font-semibold text-[color:var(--ink-light)]">To</label>
-        <input v-model="filterTo" type="date" @change="load()" />
+        <input v-model="filterTo" type="date" @change="applyFilters()" />
       </div>
     </div>
 
@@ -357,6 +405,17 @@ onUnmounted(() => {
         <div class="rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
           <div class="text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Total actual paid</div>
           <div class="font-['DM_Serif_Display'] text-[2rem] text-[color:var(--green)]">{{ fmtMoney(totalPaid) }}</div>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
+        <div class="text-[1.15rem] text-[color:var(--ink-light)]">
+          Showing <span class="font-semibold text-[color:var(--ink)]">{{ pageStart }}</span>-<span class="font-semibold text-[color:var(--ink)]">{{ pageEnd }}</span>
+          of <span class="font-semibold text-[color:var(--ink)]">{{ totalMatches }}</span> payments
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[1.1rem] text-[color:var(--ink-light)]">Page {{ currentPage }} / {{ totalPages }}</span>
+          <button class="rounded-lg border border-[color:var(--border)] px-3 py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)] disabled:opacity-50" :disabled="pageOffset === 0 || loading" @click="prevPage()">Previous</button>
+          <button class="rounded-lg border border-[color:var(--border)] px-3 py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)] disabled:opacity-50" :disabled="!hasMore || loading" @click="nextPage()">Next</button>
         </div>
       </div>
 
@@ -421,6 +480,17 @@ onUnmounted(() => {
         <div class="rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
           <div class="text-[1.1rem] font-semibold text-[color:var(--ink-light)]">Total actual paid</div>
           <div class="font-['DM_Serif_Display'] text-[2rem] text-[color:var(--green)]">{{ fmtMoney(totalPaid) }}</div>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--paper)] px-4 py-3">
+        <div class="text-[1.15rem] text-[color:var(--ink-light)]">
+          Showing <span class="font-semibold text-[color:var(--ink)]">{{ pageStart }}</span>-<span class="font-semibold text-[color:var(--ink)]">{{ pageEnd }}</span>
+          of <span class="font-semibold text-[color:var(--ink)]">{{ totalMatches }}</span> payments
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[1.1rem] text-[color:var(--ink-light)]">Page {{ currentPage }} / {{ totalPages }}</span>
+          <button class="rounded-lg border border-[color:var(--border)] px-3 py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)] disabled:opacity-50" :disabled="pageOffset === 0 || loading" @click="prevPage()">Previous</button>
+          <button class="rounded-lg border border-[color:var(--border)] px-3 py-[6px] text-[1.2rem] font-semibold text-[color:var(--ink-light)] transition-colors hover:bg-[color:var(--paper-dark)] disabled:opacity-50" :disabled="!hasMore || loading" @click="nextPage()">Next</button>
         </div>
       </div>
     </div>
