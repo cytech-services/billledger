@@ -18,6 +18,21 @@ type Bill = {
   month_day_combinations?: string[] | null
 }
 
+type BillPayload = {
+  name: string
+  company: string
+  frequency: string
+  due_day: number | null
+  next_date: string | null
+  amount: number | null
+  autopay: 'Yes' | 'No'
+  method: string
+  account: string
+  notes: string
+  custom_dates: string[]
+  month_day_combinations: string[]
+}
+
 const props = defineProps<{
   open: boolean
   bill: Bill | null
@@ -103,7 +118,7 @@ watch(
     name.value = b?.name || ''
     company.value = b?.company || ''
     frequency.value = b?.frequency || ''
-    autopay.value = (b?.autopay as any) || 'No'
+    autopay.value = b?.autopay === 'Yes' ? 'Yes' : 'No'
     amount.value = b?.amount == null ? '' : String(b.amount)
     method.value = b?.method || ''
     account.value = b?.account || ''
@@ -213,7 +228,7 @@ async function save() {
   if (frequency.value === 'Custom' && !customDates.value.filter(Boolean).length) return
   if (frequency.value === 'Yearly (Month/Day)' && !monthDayCombinations.value.filter(Boolean).length) return
 
-  const body: any = {
+  const body: BillPayload = {
     name: name.value.trim(),
     company: company.value.trim(),
     frequency: frequency.value,

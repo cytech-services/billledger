@@ -4,6 +4,7 @@ import { useApi } from '~/composables/useApi'
 import PaymentModal from '~/components/PaymentModal.vue'
 import BillDetailModal from '~/components/BillDetailModal.vue'
 import EditPaymentModal from '~/components/EditPaymentModal.vue'
+import { getErrorMessage } from '~/utils/error'
 
 type Bill = {
   id: number
@@ -176,8 +177,8 @@ async function loadDashboard(options?: { silent?: boolean; preserveScroll?: bool
     bills.value = b
     payments.value = p
     occurrences.value = d.occurrences || []
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to load dashboard'
+  } catch (e: unknown) {
+    err.value = getErrorMessage(e, 'Failed to load dashboard')
   } finally {
     if (!silent) loading.value = false
     if (preserveScroll) {
@@ -386,7 +387,7 @@ onMounted(loadDashboard)
               </div>
               <div class="flex flex-col items-end gap-[3px]">
                 <div class="text-right font-['DM_Serif_Display'] text-[1.7rem]">{{ b.expected_amount != null ? fmtMoney(b.expected_amount) : '—' }}</div>
-                <div v-if="paidAmountForBill(b) != null" class="text-[1.1rem] leading-none text-[color:var(--green)]">{{ fmtMoney(paidAmountForBill(b) as any) }}</div>
+                <div v-if="paidAmountForBill(b) != null" class="text-[1.1rem] leading-none text-[color:var(--green)]">{{ fmtMoney(paidAmountForBill(b)) }}</div>
               </div>
               <div></div>
               <div><span class="inline-flex whitespace-nowrap rounded-[20px] bg-[color:var(--green-light)] px-[9px] py-1 text-[1.1rem] font-semibold text-[color:var(--green)]">✅ Paid</span></div>

@@ -3,10 +3,14 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import { useRuntimeConfig } from '#imports'
 import { useConfirm } from '~/composables/useConfirm'
+import { getErrorMessage } from '~/utils/error'
 
 const api = useApi()
 const { confirm } = useConfirm()
 const tab = ref<'methods' | 'backups'>('methods')
+type MethodStat = { name: string; bill_count: number; payment_count: number; total_paid: number }
+type BackupStatus = { retention_days: number; backup_dir: string; total_backups: number; last_automatic_backup: unknown | null }
+type MethodDeleteDetails = { requires_replacement?: boolean; error?: string; payment_count?: number }
 
 const paymentMethods = ref<string[]>([])
 const methodStats = ref<Record<string, { bill_count: number; payment_count: number; total_paid: number }>>({})
@@ -14,7 +18,7 @@ const newMethod = ref('')
 const settingsErr = ref<string | null>(null)
 
 const backups = ref<Array<{ filename: string; size: number; created_at: string; reason: string }>>([])
-const backupStatus = ref<any>(null)
+const backupStatus = ref<BackupStatus | null>(null)
 const backingUp = ref(false)
 
 const fmtMoney = (n: number | null | undefined) =>
@@ -22,14 +26,17 @@ const fmtMoney = (n: number | null | undefined) =>
 
 async function loadMethods() {
   paymentMethods.value = await api.get<string[]>('/api/payment-methods')
-  const rows = await api.get<any[]>('/api/payment-methods/stats')
-  const map: any = {}
+  const rows = await api.get<MethodStat[]>('/api/payment-methods/stats')
+  const map: Record<string, MethodStat> = {}
   for (const r of rows) map[String(r.name || '').toLowerCase()] = r
   methodStats.value = map
 }
 
 async function loadBackups() {
-  const [b, s] = await Promise.all([api.get<any[]>('/api/backups'), api.get<any>('/api/backups/status')])
+  const [b, s] = await Promise.all([
+    api.get<Array<{ filename: string; size: number; created_at: string; reason: string }>>('/api/backups'),
+    api.get<BackupStatus>('/api/backups/status')
+  ])
   backups.value = b
   backupStatus.value = s
 }
@@ -63,21 +70,21 @@ async function removeMethod(name: string) {
   try {
     await api.del(`/api/payment-methods/${encodeURIComponent(name)}`)
     await refreshWithScroll(loadMethods)
-  } catch (e: any) {
+  } catch (e: unknown) {
     try {
-      const details = JSON.parse(e?.message || '{}')
+      const details = JSON.parse(getErrorMessage(e, '{}')) as MethodDeleteDetails
       if (details?.requires_replacement) {
         await replaceAndDelete(name, details)
         return
       }
-      settingsErr.value = details?.error || e?.message || 'Failed to remove method'
+      settingsErr.value = details?.error || getErrorMessage(e, 'Failed to remove method')
     } catch {
-      settingsErr.value = e?.message || 'Failed to remove method'
+      settingsErr.value = getErrorMessage(e, 'Failed to remove method')
     }
   }
 }
 
-async function replaceAndDelete(oldName: string, details: any) {
+async function replaceAndDelete(oldName: string, details: MethodDeleteDetails) {
   const choices = methodsSorted.value.filter((m) => m.toLowerCase() !== oldName.toLowerCase())
   if (!choices.length) {
     settingsErr.value = 'Add another method first, then replace and delete.'
@@ -104,8 +111,8 @@ async function runManualBackup() {
   try {
     await api.post('/api/backups')
     await refreshWithScroll(loadBackups)
-  } catch (e: any) {
-    settingsErr.value = e?.message || 'Backup failed'
+  } catch (e: unknown) {
+    settingsErr.value = getErrorMessage(e, 'Backup failed')
   } finally {
     backingUp.value = false
   }
@@ -131,8 +138,8 @@ async function restoreBackup(filename: string) {
     await refreshWithScroll(async () => {
       await Promise.all([loadBackups(), loadMethods()])
     })
-  } catch (e: any) {
-    settingsErr.value = e?.message || 'Restore failed'
+  } catch (e: unknown) {
+    settingsErr.value = getErrorMessage(e, 'Restore failed')
   }
 }
 

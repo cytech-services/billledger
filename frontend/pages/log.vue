@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import BillDetailModal from '~/components/BillDetailModal.vue'
 import { useConfirm } from '~/composables/useConfirm'
+import { getErrorMessage } from '~/utils/error'
 
 type Bill = { id: number; name: string; amount?: number | null }
 type Payment = {
@@ -109,8 +110,8 @@ async function load(options?: { silent?: boolean; preserveScroll?: boolean }) {
     if (filterTo.value) params.push(`to=${encodeURIComponent(filterTo.value)}`)
     const url = params.length ? `/api/payments?${params.join('&')}` : '/api/payments'
     payments.value = await api.get<Payment[]>(url)
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to load payments'
+  } catch (e: unknown) {
+    err.value = getErrorMessage(e, 'Failed to load payments')
   } finally {
     if (!silent) loading.value = false
     if (preserveScroll) {
@@ -216,8 +217,8 @@ async function saveEdit() {
     })
     closeEdit()
     await load({ silent: true, preserveScroll: true })
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to update payment'
+  } catch (e: unknown) {
+    err.value = getErrorMessage(e, 'Failed to update payment')
   } finally {
     saving.value = false
   }
@@ -235,8 +236,8 @@ async function removePayment(id: number) {
   try {
     await api.del(`/api/payments/${id}`)
     await load({ silent: true, preserveScroll: true })
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to remove payment'
+  } catch (e: unknown) {
+    err.value = getErrorMessage(e, 'Failed to remove payment')
   }
 }
 
@@ -255,8 +256,8 @@ async function removeEditingPayment() {
     await api.del(`/api/payments/${editing.value.id}`)
     closeEdit()
     await load({ silent: true, preserveScroll: true })
-  } catch (e: any) {
-    err.value = e?.message || 'Failed to remove payment'
+  } catch (e: unknown) {
+    err.value = getErrorMessage(e, 'Failed to remove payment')
   } finally {
     saving.value = false
   }
